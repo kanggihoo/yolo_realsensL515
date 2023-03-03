@@ -1,6 +1,4 @@
-import argparse
 import os
-import platform
 import sys
 from pathlib import Path
 import pyrealsense2 as rs

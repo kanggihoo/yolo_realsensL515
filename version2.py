@@ -1,6 +1,4 @@
-import argparse
 import os
-import platform
 import sys
 from pathlib import Path
 import pyrealsense2 as rs
@@ -83,109 +81,110 @@ def run(model = model ,
         hide_conf=False,  
         line_thickness=2  # bounding box thickness (pixels)
         ):     
-    try:
-        while True:
-            seen, windows, dt = 0, [], (Profile(), Profile(), Profile())
-            ## align 
-            frames = pipeline.wait_for_frames()
-                # # Align the depth frame to color frame
-            aligned_frames = align.process(frames)
 
-            # # Get aligned frames
-            aligned_depth_frame = aligned_frames.get_depth_frame() # aligned_depth_frame is a 640x480 depth image
-            color_frame = aligned_frames.get_color_frame()
-                    
+    while True:
+        seen, windows, dt = 0, [], (Profile(), Profile(), Profile())
+        ## align 
+        frames = pipeline.wait_for_frames()
+            # # Align the depth frame to color frame
+        aligned_frames = align.process(frames)
 
-            # color_image
-            origin_color_image = np.asanyarray(color_frame.get_data())
-            color_image = np.expand_dims(origin_color_image, axis=0)
-            im0s = color_image.copy()
-            im = torch.from_numpy(color_image).to(model.device)
-            im = im.permute(0,3,1,2)
-            
-            im = im.half() if model.fp16 else im.float()  # uint8 to fp16/32
-            im /= 255  # 0 - 255 to 0.0 - 1.0
-            if len(im.shape) == 3:
-                im = im[None]  # expand for batch dim
-            pred = model(im, augment=augment, visualize=visualize)
-            pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
-            
-            centers = []
-            distances = []
-            labels = []
-            
-            # Process predictions
-            for i, det in enumerate(pred):  # per image ################### pred에 좌표값(x,y ,w ,h , confidence? , class값이 tensor로 저장되어 있고 for문을 통해 하나씩 불러옴.)
-                seen += 1 # 처음에 seen은 0으로 저장되어 있음.
-                if webcam:  # batch_size >= 1
-                    im0 =  im0s[i].copy()
-                else:
-                    im0 = im0s.copy()
-                annotator = Annotator(im0, line_width=line_thickness, example=str(names)) # utils/plot의 Annotator 클래스 
-                if len(det):
-                    # Rescale boxes from img_size to im0 size
-                    det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], im0.shape).round() # det에 저장된 6개의 값 중에서 4개(x1,y1,x2,y2)만 불러와서 실수값의 좌표값을 반올림 작업
-
+        # # Get aligned frames
+        aligned_depth_frame = aligned_frames.get_depth_frame() # aligned_depth_frame is a 640x480 depth image
+        color_frame = aligned_frames.get_color_frame()
                 
-                    # Write results ################################################################### 결과 이미지 만들기 
-                    for *xyxy, conf, cls in det: #xyxy : det의 (x1,y1,x2,y2) , conf :얼마나 확신하는지 ,  cls: 예측한 클래스 번호 
-                        c = int(cls)
-                        x1 , y1 , x2,y2 = xyxy # x1 , y1: 좌측 상단 좌표 , x2,y2 우측 하단 좌표
-                        center = int((x1+x2)/2) , int((y1+y2)/2)
-                        ## depth 정보 가져오기(depth 카메라 해상도 (640*480))
-                        distance = aligned_depth_frame.get_distance(center[0] , center[1])
-                        centers.append(center)
-                        distances.append(distance)
-                        labels.append(names[c])
-                
-            
-            # 우선순위 정하기
-            results = {
-                "idx" : list(range(len(centers))),
-                "center" : centers,
-                "center_x" : [centers[i][0] for i in range(len(centers))],
-                "center_y" : [centers[i][1] for i in range(len(centers))],
-                "distance" : distances,
-                "label" : labels
-            }
-            final_idx = None
-            
-            if len(results) != 0:
-                df = pd.DataFrame(results).sort_values(by = ['center_y' , 'center_x'])
-                if len(df['distance'].values) == 0:
-                    continue
-                min_distance_idx = df.iloc[np.argmin(df['distance'].values), 0]
-                min_distance = df['distance'][min_distance_idx]
-                min_xy_idx = df.iloc[0,0]
-            
-                if min_distance_idx == min_xy_idx:
-                    final_idx = min_distance_idx
-                else:
-                    for i in df.index:
-                        if i != min_distance_idx:
-                            if df['distance'][i] - hight_compensation_value > min_distance:
-                                df.drop(index = i , axis = 0 , inplace=True)
-                    final_idx = df.iloc[0,0]
-                first_pick = {
-                    'x' : x_offset+(df['center_y'][final_idx]-239)*cm_per_pixel_ratio,
-                    'y' : y_offset+(319-df['center_x'][final_idx])*cm_per_pixel_ratio,
-                    'z' : df['distance'][final_idx]*100,
-                    'center' : df['center'][final_idx],
-                    'label' : df['label'][final_idx]
-                }
-                if first_pick['z'] > 90: 
-                    first_pick['label'] = "pallet"
-                return first_pick    # 단위 cm
-            
+
+        # color_image
+        origin_color_image = np.asanyarray(color_frame.get_data())
+        color_image = np.expand_dims(origin_color_image, axis=0)
+        im0s = color_image.copy()
+        im = torch.from_numpy(color_image).to(model.device)
+        im = im.permute(0,3,1,2)
+        
+        im = im.half() if model.fp16 else im.float()  # uint8 to fp16/32
+        im /= 255  # 0 - 255 to 0.0 - 1.0
+        if len(im.shape) == 3:
+            im = im[None]  # expand for batch dim
+        pred = model(im, augment=augment, visualize=visualize)
+        pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
+        
+        centers = []
+        distances = []
+        labels = []
+        
+        # Process predictions
+        for i, det in enumerate(pred):  # per image ################### pred에 좌표값(x,y ,w ,h , confidence? , class값이 tensor로 저장되어 있고 for문을 통해 하나씩 불러옴.)
+            seen += 1 # 처음에 seen은 0으로 저장되어 있음.
+            if webcam:  # batch_size >= 1
+                im0 =  im0s[i].copy()
             else:
+                im0 = im0s.copy()
+            annotator = Annotator(im0, line_width=line_thickness, example=str(names)) # utils/plot의 Annotator 클래스 
+            if len(det):
+                # Rescale boxes from img_size to im0 size
+                det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], im0.shape).round() # det에 저장된 6개의 값 중에서 4개(x1,y1,x2,y2)만 불러와서 실수값의 좌표값을 반올림 작업
+
+            
+                # Write results ################################################################### 결과 이미지 만들기 
+                for *xyxy, conf, cls in det: #xyxy : det의 (x1,y1,x2,y2) , conf :얼마나 확신하는지 ,  cls: 예측한 클래스 번호 
+                    c = int(cls)
+                    x1 , y1 , x2,y2 = xyxy # x1 , y1: 좌측 상단 좌표 , x2,y2 우측 하단 좌표
+                    center = int((x1+x2)/2) , int((y1+y2)/2)
+                    ## depth 정보 가져오기(depth 카메라 해상도 (640*480))
+                    distance = aligned_depth_frame.get_distance(center[0] , center[1])
+                    centers.append(center)
+                    distances.append(distance)
+                    labels.append(names[c])
+            
+        
+        # 우선순위 정하기
+        results = {
+            "idx" : list(range(len(centers))),
+            "center" : centers,
+            "center_x" : [centers[i][0] for i in range(len(centers))],
+            "center_y" : [centers[i][1] for i in range(len(centers))],
+            "distance" : distances,
+            "label" : labels
+        }
+        final_idx = None
+        
+        if len(results) != 0:
+            df = pd.DataFrame(results).sort_values(by = ['center_y' , 'center_x'])
+            if len(df['distance'].values) == 0:
                 continue
- 
-    finally:
-        # Stop streaming
-        pipeline.stop()
+            min_distance_idx = df.iloc[np.argmin(df['distance'].values), 0]
+            min_distance = df['distance'][min_distance_idx]
+            min_xy_idx = df.iloc[0,0]
+        
+            if min_distance_idx == min_xy_idx:
+                final_idx = min_distance_idx
+            else:
+                for i in df.index:
+                    if i != min_distance_idx:
+                        if df['distance'][i] - hight_compensation_value > min_distance:
+                            df.drop(index = i , axis = 0 , inplace=True)
+                final_idx = df.iloc[0,0]
+            first_pick = {
+                'x' : x_offset+(df['center_y'][final_idx]-239)*cm_per_pixel_ratio,
+                'y' : y_offset+(319-df['center_x'][final_idx])*cm_per_pixel_ratio,
+                'z' : df['distance'][final_idx]*100,
+                'center' : df['center'][final_idx],
+                'label' : df['label'][final_idx]
+            }
+            if first_pick['z'] > 90: 
+                first_pick['label'] = "pallet"
+            return first_pick    # 단위 cm
+        
+        else:
+            continue
     
 if __name__ == "__main__":
    check_requirements(exclude=('tensorboard', 'thop'))
-   print(run())
-   # 파레트인 경우는 어떻게 처리할 것인가? 최종적으로 확인
-   # 
+   for i in range(5):   
+       
+       print(run())
+   pipeline.stop()
+
+        
+
+
