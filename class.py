@@ -1,3 +1,4 @@
+import argparse
 import os
 import sys
 from pathlib import Path
@@ -9,7 +10,6 @@ ROOT = FILE.parents[0]  # YOLOv5 root directory , ROOT = 현재 파일의 부모
 if str(ROOT) not in sys.path: # 시스템 path에 해당 ROOT 경로가 없으면 sys.path에 추가 
     sys.path.append(str(ROOT))  # add ROOT to PATH
 ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative (오른쪽 경로를 기준으로 했을 때 왼쪽 경로의 상대경로) => 현재 터미널상 디렉토리 위치와, 현재 파일의 부모경로와의 상대경로
-print('ROOT: ' ,ROOT)
 
 from models.common import DetectMultiBackend
 from utils.dataloaders import IMG_FORMATS, VID_FORMATS, LoadImages, LoadScreenshots, LoadStreams  # LoadImages랑 LoadStreams는 다시한번 보기 
@@ -24,10 +24,12 @@ import cv2
 import pandas as pd
 
 class BoxDetect():
-    def __init__(self):
+    def __init__(self , save_video='False'):
         self.Camera_cofig()
         self.model = self.Model_cofig()
-        
+        self.save_video = save_video
+        self.path = Path(os.path.relpath(ROOT, Path.cwd()))
+            
     def Camera_cofig(self):
         self.pipeline = rs.pipeline()
         config = rs.config()
@@ -60,6 +62,7 @@ class BoxDetect():
         stride, self.names, pt = model.stride, model.names, model.pt
         imgsz = check_img_size(imgsz, s=stride)  # check image size
 
+        
         # self.view_img = check_imshow(warn=True) # cv2.imshow()명령어가 잘 먹는 환경인지 확인
         return model 
     def Run(self,
@@ -76,6 +79,12 @@ class BoxDetect():
             hide_conf=False,  
             line_thickness=2,  # bounding box thickness (pixels)
             ):
+        if self.save_video:
+            save_path = str(self.path / "result")
+            save_path = str(Path(save_path).with_suffix('.mp4'))  # force *.mp4 suffix on results videos
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter(save_path, fourcc, 2.0, (640+640, 480)) #  fps, w, h = 30, im0.shape[1], im0.shape[0]
+
         try:
             while True:
                 seen, windows, dt = 0, [], (Profile(), Profile(), Profile())
@@ -206,7 +215,11 @@ class BoxDetect():
                     if first_pick['z'] > 90: 
                         first_pick['label'] = "pallet"
                     print(first_pick)
-                
+                    
+                if self.save_video: # 동영상 저장 
+                    hstack_img = np.hstack((origin_color_image , im0))
+                    out.write(hstack_img) # 동영상 저장
+                    
                 
                 cv2.imshow("original", origin_color_image)
                 cv2.imshow(str("result"), im0)
@@ -220,9 +233,18 @@ class BoxDetect():
         finally:
             self.pipeline.stop()
             cv2.destroyAllWindows()
+            if self.save_video:
+                out.release()
 
-    
+parser = argparse.ArgumentParser()   
+parser.add_argument('--save_video' , action='store_true' , help='save_video')
+opt = parser.parse_args()
+opt = vars(opt)
+
 if __name__ == "__main__":
    check_requirements(exclude=('tensorboard', 'thop'))
-   model = BoxDetect()
+   model = BoxDetect(**opt)
    model.Run(model=model.model)
+    
+    
+    

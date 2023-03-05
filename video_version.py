@@ -234,10 +234,6 @@ def run(model = model ,
         pipeline.stop()
         cv2.destroyAllWindows()
 
-
-
-def inference():
-    pass
     
 if __name__ == "__main__":
    check_requirements(exclude=('tensorboard', 'thop'))
