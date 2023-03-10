@@ -215,7 +215,7 @@ def parse_opt():
     #          True나 False를 지정하게 하고 싶은 경우 action 사용(stroe_false인 경우는 값이 지정시 False , 지정하지 않으면 True가 됨.)
     # help : 사용자가 지정한 옵션에 대한 설명 코멘트
     
-    parser.add_argument('--weights', nargs='+', type=str, default=ROOT / 'runs/best_0215+30.pt', help='model path or triton URL')
+    parser.add_argument('--weights', nargs='+', type=str, default=ROOT / 'runs/best.pt', help='model path or triton URL')
     # parser.add_argument('--source', type=str, default=ROOT / 'dataset/test_data/', help='file/dir/URL/glob/screen/0(webcam)')
     parser.add_argument('--source', type=str, default=0, help='file/dir/URL/glob/screen/0(webcam)')
     parser.add_argument('--data', type=str, default=ROOT / 'data/coco128.yaml', help='(optional) dataset.yaml path')

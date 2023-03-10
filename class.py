@@ -4,6 +4,8 @@ import sys
 from pathlib import Path
 import pyrealsense2 as rs
 import torch
+import keyboard
+import datetime
 
 FILE = Path(__file__).resolve() # 현재 파일의 전체 경로 (resolve() 홈디렉토리부터 현재 경로까지의 위치를 나타냄)
 ROOT = FILE.parents[0]  # YOLOv5 root directory , ROOT = 현재 파일의 부모 경로 
@@ -29,6 +31,9 @@ class BoxDetect():
         self.model = self.Model_cofig()
         self.save_video = save_video
         self.path = Path(os.path.relpath(ROOT, Path.cwd()))
+        
+        self.save_img_path = Path(r'C:\Users\11kkh\Desktop\realsense_custom_data')
+
             
     def Camera_cofig(self):
         self.pipeline = rs.pipeline()
@@ -57,12 +62,12 @@ class BoxDetect():
         half=False  # use FP16 half-precision inference
         dnn=False  # use OpenCV DNN for ONNX inference
         device = select_device()
+        print(f'device : {device}')
         
         model = DetectMultiBackend( weights, device=device, dnn=dnn, data=data, fp16=half) # 앞에서 정의한 weights , device , data: 어떤 데이터 쓸 것인지
         stride, self.names, pt = model.stride, model.names, model.pt
         imgsz = check_img_size(imgsz, s=stride)  # check image size
-
-        
+    
         # self.view_img = check_imshow(warn=True) # cv2.imshow()명령어가 잘 먹는 환경인지 확인
         return model 
     def Run(self,
@@ -79,9 +84,11 @@ class BoxDetect():
             hide_conf=False,  
             line_thickness=2,  # bounding box thickness (pixels)
             ):
+
         if self.save_video:
             save_path = str(self.path / "result")
             save_path = str(Path(save_path).with_suffix('.mp4'))  # force *.mp4 suffix on results videos
+            
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
             out = cv2.VideoWriter(save_path, fourcc, 2.0, (640+640, 480)) #  fps, w, h = 30, im0.shape[1], im0.shape[0]
 
@@ -106,6 +113,7 @@ class BoxDetect():
                 depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
                 # color_image
                 origin_color_image = np.asanyarray(color_frame.get_data())
+                origin_color_image2 = origin_color_image.copy() # 사진 저장을 위한 이미지
                 color_image = np.expand_dims(origin_color_image, axis=0)
                 im0s = color_image.copy()
                 im = torch.from_numpy(color_image).to(model.device)
@@ -143,7 +151,7 @@ class BoxDetect():
                         # Write results ################################################################### 결과 이미지 만들기 
                         for idx, (*xyxy, conf, cls) in enumerate(det): ## det에 담긴 tensor를 거꾸로 루프 돌리기  xyxy : det의 (x1,y1,x2,y2) , conf :얼마나 확신하는지 ,  cls: 예측한 클래스 번호 
                             if True or save_crop or view_img:  # Add bbox to image
-                                c = int(cls)  # integer class
+                                c = int(cls)  # integer 
                                 label = None if hide_labels else (self.names[c] if hide_conf else f'{self.names[c]} {conf:.2f}')
                                 annotator.box_label(xyxy, label, color=colors(c, True)) 
                                 x1 , y1 , x2,y2 = xyxy 
@@ -219,8 +227,17 @@ class BoxDetect():
                 if self.save_video: # 동영상 저장 
                     hstack_img = np.hstack((origin_color_image , im0))
                     out.write(hstack_img) # 동영상 저장
-                    
                 
+                if keyboard.is_pressed('s'):
+                    now = datetime.datetime.now()
+                    suffix = '.jpg'
+                    file_name = f"{now.strftime('%Y_%m_%d_%H_%M_%S_%f')}"+suffix
+                    file_path = self.save_img_path / file_name
+                    image = cv2.resize(origin_color_image2 , (640,640))
+                    cv2.imwrite(file_path , image)
+                    print(f'save_image : {file_name} , save_path : {file_path}')
+                    
+                    
                 cv2.imshow("original", origin_color_image)
                 cv2.imshow(str("result"), im0)
                 cv2.imshow("depth" ,depth_colormap)
