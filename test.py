@@ -9,7 +9,7 @@ class check:
     def __init__(self):
         self.pipeline = rs.pipeline()
         config = rs.config()
-        config.enable_stream(rs.stream.depth, 1024,768, rs.format.z16, 30) # 640*480 , 1024*768
+        config.enable_stream(rs.stream.depth, 640,480, rs.format.z16, 30) # 640*480 , 1024*768
         config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30) # 640*360 , 640*480 , 960*540 , 1280*720 , 1920*1080
         self.profile = self.pipeline.start(config)
         
@@ -137,6 +137,8 @@ class check:
             color_image = np.asanyarray(self.color_frame.get_data())
             
             self.depth_intrin = self.aligned_depth_frame.profile.as_video_stream_profile().intrinsics
+            print("depth_intrin : {}".format(self.depth_intrin))
+            print(self.color_frame.profile.as_video_stream_profile().intrinsics)
             depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
             
  

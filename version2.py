@@ -53,7 +53,7 @@ dnn=False  # use OpenCV DNN for ONNX inference
 cm_per_pixel_ratio = 10/(267-161) # pixel to cm 관련 변수 #0.09433962264150944
 print(cm_per_pixel_ratio)
 FOV = (640*cm_per_pixel_ratio , 480*cm_per_pixel_ratio) # (카메라상 0,0 기준 시야 범위)
-x_offset , y_offset = 15 , 15 # 카메라 중심으로 부터 프레임의 원점사이의 x,y 거리 (카메라상에서의 x,y 와 프레임의 x,y는 반대) 단위: cm
+x_offset , y_offset, z_offset = 15 , 15 , None # 카메라 중심으로 부터 프레임의 원점사이의 x,y 거리 (카메라상에서의 x,y 와 프레임의 x,y는 반대) 단위: z축 모터가 위치하는 높이와 반환하는 z값 사이의 작업이 필요해보이는데
 hight_compensation_value = 0.01
 ####################################################################### 
 # Load model (모델 가져오기)

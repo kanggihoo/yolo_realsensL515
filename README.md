@@ -1,1 +1,28 @@
 yolov5 intelrealsense L515
+
+# 모델 구동을 위해 꼭 필요한 것
+## 디렉토리 
+    1. data
+    2. models
+    3. runs (가중치 파일 들어가 있음)
+    4. utils
+## 파일
+    1. eport.py
+    2. box인식후 좌표 반환 코드
+    3. requirements.txt
+
+## requirements.txt 파일 생성
+    - pip freeze > requirements.txt
+## requirements.txt 설치 방법
+    - pip install -r requirements.txt
+
+## 가상환경 만들기 (venv 패키지 활용)
+   - 가상환경 만들고 싶은 디렉토리로 이동
+   - python -m venv (가상환경 파일 이름)
+## 가상환경 활성화
+   - 윈도우
+     - 가상환경폴더/Scripts/activate 입력, python interpreter를 가상환경 이름으로 설정
+   - 우분투
+     - source 가상환경폴더/bin/activate 입력 , python interpreter를 가상환경 이름으로 설정
+## 가상환경 비활성화 
+   - deactivate
