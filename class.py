@@ -56,7 +56,7 @@ class BoxDetect():
         self.x_offset , self.y_offset = 15 , 15 # 카메라 중심으로 부터 프레임의 원점사이의 x,y 거리 (카메라상에서의 x,y 와 프레임의 x,y는 반대) 단위: cm   
         
     def Model_cofig(self): ####################################################################### 변수 초기화
-        weights = ROOT / 'runs/best.pt'
+        weights = ROOT / 'config/best.pt'
         data=ROOT / 'data/coco128.yaml'
         imgsz=(640, 640)  # inference size (height, width)          
         half=False  # use FP16 half-precision inference
@@ -74,8 +74,8 @@ class BoxDetect():
             model,
             augment = False,
             visualize = False,
-            conf_thres = 0.5,
-            iou_thres = 0.45,
+            conf_thres = 0.65,
+            iou_thres = 0.5,
             classes = None,
             agnostic_nms = False,
             max_det=1000,
@@ -113,7 +113,9 @@ class BoxDetect():
                 depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
                 # color_image
                 origin_color_image = np.asanyarray(color_frame.get_data())
+                # origin_color_image = cv2.resize(origin_color_image , (640,480))
                 origin_color_image2 = origin_color_image.copy() # 사진 저장을 위한 이미지
+                
                 color_image = np.expand_dims(origin_color_image, axis=0)
                 im0s = color_image.copy()
                 im = torch.from_numpy(color_image).to(model.device)
@@ -151,23 +153,24 @@ class BoxDetect():
                         # Write results ################################################################### 결과 이미지 만들기 
                         for idx, (*xyxy, conf, cls) in enumerate(det): ## det에 담긴 tensor를 거꾸로 루프 돌리기  xyxy : det의 (x1,y1,x2,y2) , conf :얼마나 확신하는지 ,  cls: 예측한 클래스 번호 
                             if True or save_crop or view_img:  # Add bbox to image
+                                x1 , y1 , x2,y2 = xyxy 
+                                center = int((x1+x2)/2) , int((y1+y2)/2)
+                                distance = aligned_depth_frame.get_distance(center[0] , center[1])
+                                
                                 c = int(cls)  # integer 
                                 label = None if hide_labels else (self.names[c] if hide_conf else f'{self.names[c]} {conf:.2f}')
-                                annotator.box_label(xyxy, label, color=colors(c, True)) 
-                                x1 , y1 , x2,y2 = xyxy 
+                                annotator.box_label(xyxy, distance,label, color=colors(c, True) ) 
                                 # print(f"x : {x1 } , y : {y1} , x2: {x2} , y2: {y2} , type : {type(x1)} ")
-                                center = int((x1+x2)/2) , int((y1+y2)/2)
                                 
                                 cv2.circle(im0 , (center) , 3 , (255,255,255) , 3) # 중심좌표 시각화
                             
                                 cv2.circle(depth_colormap , (center) , 3 , (255,255,255) , 3 )
-                                distance = aligned_depth_frame.get_distance(center[0] , center[1])
                                 # print(distance)
                                 
-                                
-                                centers.append(center)
-                                distances.append(distance)
-                                labels.append(self.names[c])
+                                if distance < 0.9 and center[0] < 529:
+                                    centers.append(center)
+                                    distances.append(round(distance,3))
+                                    labels.append(self.names[c])
                                 
                                         
                     # Stream results (webcam 화면 으로 부터받은 결과를 출력)
@@ -186,26 +189,24 @@ class BoxDetect():
                 
                 
 
-                if len(results) != 0:
+                if len(results['idx']) != 0:
                     df = pd.DataFrame(results).sort_values(by = ['center_y' , 'center_x'])
-                    for i in range(len(df)):
-                        cv2.putText(origin_color_image , str(df['idx'][i]) , (df['center_x'][i] , df['center_y'][i]) , cv2.FONT_HERSHEY_COMPLEX , 1 , (255,255,255))
-                    if len(df['distance'].values) == 0:
-                        continue
+                    # for i in range(len(df)):
+                    #     cv2.putText(origin_color_image , str(df['idx'][i]) , (df['center_x'][i] , df['center_y'][i]) , cv2.FONT_HERSHEY_COMPLEX , 1 , (255,255,255))
                     min_distance_idx = df.iloc[np.argmin(df['distance'].values), 0]
                     min_distance = df['distance'][min_distance_idx]
                     min_xy_idx = df.iloc[0,0]
                 
                     if min_distance_idx == min_xy_idx:
                         final_idx = min_distance_idx
-                        cv2.putText(origin_color_image , "first11!!" , (df['center'][final_idx][0]-10 , df['center'][final_idx][1]) , cv2.FONT_HERSHEY_COMPLEX,1,(255,0,0) )
+                        cv2.putText(origin_color_image , "first" , (df['center'][final_idx][0]-40 , df['center'][final_idx][1]+10) , cv2.FONT_ITALIC,1.4,(255,0,0),3 )
                     else:
                         for i in df.index:
                             if i != min_distance_idx:
                                 if df['distance'][i] - self.hight_compensation_value > min_distance:
                                     df.drop(index = i , axis = 0 , inplace=True)
                         final_idx = df.iloc[0,0]
-                        cv2.putText(origin_color_image , "first22!!" , (df['center'][final_idx][0]-10 , df['center'][final_idx][1]) , cv2.FONT_HERSHEY_COMPLEX,1,(255,0,0) )
+                        cv2.putText(origin_color_image , "first" , (df['center'][final_idx][0]-40 , df['center'][final_idx][1]+10) , cv2.FONT_ITALIC,1.4,(255,0,0),3 )
                         # if df['distance'][min_distance_idx] + 0.01 < df['distance'][min_xy_idx]:
                         #     final_idx = min_distance_idx
                         #     cv2.putText(origin_color_image , "first!!" , (df['center'][final_idx][0]-10 , df['center'][final_idx][1]) , cv2.FONT_HERSHEY_COMPLEX,1,(255,0,0))
@@ -223,6 +224,9 @@ class BoxDetect():
                     if first_pick['z'] > 90: 
                         first_pick['label'] = "pallet"
                     print(first_pick)
+                else:
+                    cv2.putText(origin_color_image , "Palletizing End" , (320-230,240) , cv2.FONT_HERSHEY_DUPLEX,2,(0,0,0) , 4 , 3 )
+                    
                     
                 if self.save_video: # 동영상 저장 
                     hstack_img = np.hstack((origin_color_image , im0))

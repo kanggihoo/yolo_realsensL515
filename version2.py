@@ -40,7 +40,7 @@ sensor_dep.set_option(rs.option.visual_preset , 3)
 print("set_min_visual_preset : ",sensor_dep.get_option(rs.option.visual_preset))
 
 ####################################################################### 변수 초기화
-weights = ROOT / 'runs/best.pt'
+weights = ROOT / 'config/best.pt'
 data=ROOT / 'data/coco128.yaml'
 webcam = True
 imgsz=(640, 640)  # inference size (height, width)          
