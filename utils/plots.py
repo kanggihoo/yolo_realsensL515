@@ -102,8 +102,8 @@ class Annotator:
             cv2.rectangle(self.im, p1, p2, color, thickness=self.lw, lineType=cv2.LINE_AA)
 
             if label:
-                if distance > 0.90:
-                    label = 'pallete'
+                # if distance > 0.90:
+                #     label = 'pallete'
                 tf = max(self.lw - 1, 1)  # font thickness
                 w, h = cv2.getTextSize(label, 0, fontScale=self.lw / 3, thickness=tf)[0]  # text width, height
                 outside = p1[1] - h >= 3

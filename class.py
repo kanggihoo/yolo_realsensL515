@@ -2,7 +2,6 @@ import argparse
 import os
 import sys
 from pathlib import Path
-import pyrealsense2 as rs
 import torch
 import keyboard
 import datetime
@@ -24,6 +23,7 @@ import pyrealsense2 as rs
 import numpy as np
 import cv2
 import pandas as pd
+from utils.aruco_utils import ARUCO_DICT, aruco_display
 
 class BoxDetect():
     def __init__(self , save_video='False'):
@@ -33,43 +33,61 @@ class BoxDetect():
         self.path = Path(os.path.relpath(ROOT, Path.cwd()))
         
         self.save_img_path = Path(r'C:\Users\11kkh\Desktop\realsense_custom_data')
-
+        
+        self.Aruco_detect()
             
     def Camera_cofig(self):
         self.pipeline = rs.pipeline()
         config = rs.config()
-        config.enable_stream(rs.stream.depth, 1024,768, rs.format.z16, 30) # 640*480 , 1024*768
+        config.enable_stream(rs.stream.depth, 640,480, rs.format.z16, 30) # 640*480 , 1024*768
         config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30) # 640*360 , 640*480 , 960*540 , 1280*720 , 1920*1080
         
         self.profile = self.pipeline.start(config)
         
         align_to = rs.stream.color
-        self.align = rs.align(align_to)
+        self.align = rs.align(align_to) #aling_mode의 시간이 오래 걸린다고 하면 
         
         sensor_dep = self.profile.get_device().first_depth_sensor()
         sensor_dep.set_option(rs.option.min_distance , 0)
-        sensor_dep.set_option(rs.option.visual_preset , 3)  
+        sensor_dep.set_option(rs.option.visual_preset , 0)  
         
-        self.cm_per_pixel_ratio = 10/(267-161) # pixel to cm 관련 변수 #0.09433962264150944
+        self.cm_per_pixel_ratio =  0.159514 # pixel to cm 관련 변수 #0.09433962264150944
         self.hight_compensation_value = 0.01 # 1cm
         self.FOV = (640*self.cm_per_pixel_ratio , 480*self.cm_per_pixel_ratio) # (카메라상 0,0 기준 시야 범위)
-        self.x_offset , self.y_offset = 15 , 15 # 카메라 중심으로 부터 프레임의 원점사이의 x,y 거리 (카메라상에서의 x,y 와 프레임의 x,y는 반대) 단위: cm   
-        
+        self.x_offset , self.y_offset = 0 , 0 # 카메라 중심으로 부터 프레임의 원점사이의 x,y 거리 (카메라상에서의 x,y 와 프레임의 x,y는 반대) 단위: cm   
+        self.x_ref , self.y_ref = (0,0)
     def Model_cofig(self): ####################################################################### 변수 초기화
         weights = ROOT / 'config/best.pt'
         data=ROOT / 'data/coco128.yaml'
         imgsz=(640, 640)  # inference size (height, width)          
         half=False  # use FP16 half-precision inference
         dnn=False  # use OpenCV DNN for ONNX inference
-        device = select_device()
-        print(f'device : {device}')
         
+        # Load model
+        device = select_device()
         model = DetectMultiBackend( weights, device=device, dnn=dnn, data=data, fp16=half) # 앞에서 정의한 weights , device , data: 어떤 데이터 쓸 것인지
         stride, self.names, pt = model.stride, model.names, model.pt
         imgsz = check_img_size(imgsz, s=stride)  # check image size
     
         # self.view_img = check_imshow(warn=True) # cv2.imshow()명령어가 잘 먹는 환경인지 확인
         return model 
+    def Aruco_detect(self):
+        frames = self.pipeline.wait_for_frames()
+        # # Align the depth frame to color frame
+        aligned_frames = self.align.process(frames)
+
+        color_frame = aligned_frames.get_color_frame()
+        color_image = np.asanyarray(color_frame.get_data())
+        type = "DICT_5X5_100"
+        arucoDict = cv2.aruco.Dictionary_get(ARUCO_DICT[type])
+        arucoParams = cv2.aruco.DetectorParameters_create()
+        corners, ids, rejected = cv2.aruco.detectMarkers(color_image, arucoDict, parameters=arucoParams) 
+        if len(corners):
+            self.x_ref,self.y_ref = corners[0].reshape(4,2)[0]
+            print(self.x_ref,self.y_ref)
+        else:
+            print("sdsdsd")
+        
     def Run(self,
             model,
             augment = False,
@@ -165,7 +183,7 @@ class BoxDetect():
                                 cv2.circle(im0 , (center) , 3 , (255,255,255) , 3) # 중심좌표 시각화
                             
                                 cv2.circle(depth_colormap , (center) , 3 , (255,255,255) , 3 )
-                                # print(distance)
+
                                 
                                 if distance < 0.9 and center[0] < 529:
                                     centers.append(center)
@@ -207,15 +225,9 @@ class BoxDetect():
                                     df.drop(index = i , axis = 0 , inplace=True)
                         final_idx = df.iloc[0,0]
                         cv2.putText(origin_color_image , "first" , (df['center'][final_idx][0]-40 , df['center'][final_idx][1]+10) , cv2.FONT_ITALIC,1.4,(255,0,0),3 )
-                        # if df['distance'][min_distance_idx] + 0.01 < df['distance'][min_xy_idx]:
-                        #     final_idx = min_distance_idx
-                        #     cv2.putText(origin_color_image , "first!!" , (df['center'][final_idx][0]-10 , df['center'][final_idx][1]) , cv2.FONT_HERSHEY_COMPLEX,1,(255,0,0))
-                        # else :
-                        #     final_idx = min_xy_idx
-                        #     cv2.putText(origin_color_image , "first!!" , (df['center'][final_idx][0]-10 , df['center'][final_idx][1]) , cv2.FONT_HERSHEY_COMPLEX,1,(255,0,0))
                     first_pick = {
-                        'x' : self.x_offset+(df['center_y'][final_idx]-239)*self.cm_per_pixel_ratio,
-                        'y' : self.y_offset+(319-df['center_x'][final_idx])*self.cm_per_pixel_ratio,
+                        'x' : abs((self.y_ref-df['center_y'][final_idx])*self.cm_per_pixel_ratio),
+                        'y' : abs((self.x_ref-df['center_x'][final_idx])*self.cm_per_pixel_ratio),
                         'z' : df['distance'][final_idx]*100,
                         'center' : df['center'][final_idx],
                         'label' : df['label'][final_idx]
@@ -232,7 +244,7 @@ class BoxDetect():
                     hstack_img = np.hstack((origin_color_image , im0))
                     out.write(hstack_img) # 동영상 저장
                 
-                if keyboard.is_pressed('s'):
+                if cv2.waitKey(1) == ord('s'):
                     now = datetime.datetime.now()
                     suffix = '.jpg'
                     file_name = f"{now.strftime('%Y_%m_%d_%H_%M_%S_%f')}"+suffix
@@ -245,9 +257,9 @@ class BoxDetect():
                 cv2.imshow("original", origin_color_image)
                 cv2.imshow(str("result"), im0)
                 cv2.imshow("depth" ,depth_colormap)
-                    # cv2.waitKey(1)  # 1 millisecondqq
+                # cv2.waitKey(1)  # 1 millisecondqq
                     
-                # Print results
+
                 if cv2.waitKey(1) == ord('q'):
                     break 
                   
@@ -263,7 +275,7 @@ opt = parser.parse_args()
 opt = vars(opt)
 
 if __name__ == "__main__":
-   check_requirements(exclude=('tensorboard', 'thop'))
+#    check_requirements(exclude=('tensorboard', 'thop'))
    model = BoxDetect(**opt)
    model.Run(model=model.model)
     
