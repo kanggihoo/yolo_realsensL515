@@ -13,7 +13,7 @@ class Checkscale():
         self.depth_scale = self.profile.get_device().first_depth_sensor().get_depth_scale()    
         self.mouse_position = []
         
-        self.depth_min = 0.1 #meter
+        self.depth_min = 0.01 #meter
         self.depth_max = 2.0 #meter
 
         self.depth_intrin = self.profile.get_stream(rs.stream.depth).as_video_stream_profile().get_intrinsics() # depth 카메라의 내부 파라미터
@@ -30,54 +30,54 @@ class Checkscale():
         
         self.SetCameraConfig()
         self.GetCameraConfig()
-        print(f"depth_intrin : {self.depth_intrin}")
+        # print(f"depth_intrin : {self.depth_intrin}")
         
-        print(f"color_intrin : {self.color_intrin}")
-        print(f"depth_to_color_extrin : {self.depth_to_color_extrin}")
-        print(f"color_to_depth_extrin : {self.color_to_depth_extrin}")
+        # print(f"color_intrin : {self.color_intrin}")
+        # print(f"depth_to_color_extrin : {self.depth_to_color_extrin}")
+        # print(f"color_to_depth_extrin : {self.color_to_depth_extrin}")
 
-    def Drawline_pixel(self , image , start:int , num_pixel:int , direction = 'x' ):
-        '''
-        앞에서 구한 pixel2cm에 맞게 직선을 그려주는 함수
-        # input : numpy array 배열
-        # start : 직선의 시작 위치 
-        # direction : 'x' or 'y' 빙향
-        # num_pixel : self.pixel2cm의 몇 배를 할 것인지 
-        # output : line을 그린 후 numpy array 반환 
-        '''
+    # def Drawline_pixel(self , image , start:int , num_pixel:int , direction = 'x' ):
+    #     '''
+    #     앞에서 구한 pixel2cm에 맞게 직선을 그려주는 함수
+    #     # input : numpy array 배열
+    #     # start : 직선의 시작 위치 
+    #     # direction : 'x' or 'y' 빙향
+    #     # num_pixel : self.pixel2cm의 몇 배를 할 것인지 
+    #     # output : line을 그린 후 numpy array 반환 
+    #     '''
         
         
-        # 1.6cm => 10pixel 
-        start_x , start_y = start[0] , start[1]
-        if direction =='x':
-            end_x , end_y = start_x+num_pixel , start_y
-        else:
-            end_x , end_y = start_x , start_y+num_pixel
+    #     # 1.6cm => 10pixel 
+    #     start_x , start_y = start[0] , start[1]
+    #     if direction =='x':
+    #         end_x , end_y = start_x+num_pixel , start_y
+    #     else:
+    #         end_x , end_y = start_x , start_y+num_pixel
             
-        cv2.line(image , (start_x , start_y) , (end_x , end_y) , (255,255,255) , 2 )
-        cv2.putText(image , f"{num_pixel}pixel = {round(self.pixel2cm*num_pixel,3)}cm" , (start_x , start_y-20) , cv2.FONT_ITALIC,0.5,(0,0,0),2 )
-        return image
-    def Drawline_cm(self , image , start:int , cm:float , direction = 'x' ): # 특정 cm 만큼 직선을 그려주는 함수
-        '''
-        앞에서 구한 pixel2cm에 맞게 직선을 그려주는 함수
-        # input : numpy array 배열
-        # start : 직선의 시작 위치 
-        # direction : 'x' or 'y' 빙향
-        # cm: 원하는 cm 
-        # output : line을 그린 후 numpy array 반환 
-        '''
+    #     cv2.line(image , (start_x , start_y) , (end_x , end_y) , (255,255,255) , 2 )
+    #     cv2.putText(image , f"{num_pixel}pixel = {round(self.pixel2cm*num_pixel,3)}cm" , (start_x , start_y-20) , cv2.FONT_ITALIC,0.5,(0,0,0),2 )
+    #     return image
+    # def Drawline_cm(self , image , start:int , cm:float , direction = 'x' ): # 특정 cm 만큼 직선을 그려주는 함수
+    #     '''
+    #     앞에서 구한 pixel2cm에 맞게 직선을 그려주는 함수
+    #     # input : numpy array 배열
+    #     # start : 직선의 시작 위치 
+    #     # direction : 'x' or 'y' 빙향
+    #     # cm: 원하는 cm 
+    #     # output : line을 그린 후 numpy array 반환 
+    #     '''
         
-        pixel = cm*self.cm2pixel
-        pixel_round = int(round(pixel,0))
-        start_x , start_y = start[0] , start[1]
-        if direction =='x':
-            end_x , end_y = start_x+pixel_round , start_y
-        else:
-            end_x , end_y = start_x , start_y+pixel_round
+    #     pixel = cm*self.cm2pixel
+    #     pixel_round = int(round(pixel,0))
+    #     start_x , start_y = start[0] , start[1]
+    #     if direction =='x':
+    #         end_x , end_y = start_x+pixel_round , start_y
+    #     else:
+    #         end_x , end_y = start_x , start_y+pixel_round
             
-        cv2.line(image , (start_x , start_y) , (end_x , end_y) , (255,255,255) , 2 )
-        cv2.putText(image , f"{cm}cm = {pixel_round}pixel ({pixel})" , (start_x , start_y-20) , cv2.FONT_ITALIC,0.5,(0,0,0),2 )
-        return image
+    #     cv2.line(image , (start_x , start_y) , (end_x , end_y) , (255,255,255) , 2 )
+    #     cv2.putText(image , f"{cm}cm = {pixel_round}pixel ({pixel})" , (start_x , start_y-20) , cv2.FONT_ITALIC,0.5,(0,0,0),2 )
+    #     return image
     
     def camera_config(self):
         self.pipeline = rs.pipeline()
@@ -123,7 +123,7 @@ class Checkscale():
         depth : depth_image의 (x,y)에서 카메라와 떨어진 거리 (m)
         depth_point : 카메라의 주점을 기준으로 하여 떨어진 거리 (x,y,z)m => 음수가 나올 수도 있음.
         '''
-        depth = depth_frame.get_distance(int(x_depth_pixel), int(y_depth_pixel)) # depth 카메라 상의 픽셀 정보를 바탕으로 depth 갚 구함
+        depth = depth_frame.get_distance(int(round(x_depth_pixel,3)), int(round(y_depth_pixel,3))) # depth 카메라 상의 픽셀 정보를 바탕으로 depth 갚 구함
         depth_point = rs.rs2_deproject_pixel_to_point(self.depth_intrin, [int(x_depth_pixel), int(y_depth_pixel)], depth) # depth 카메라의 픽셀과 depth 값을 통해 3D 좌표계 구함. 
         
         # [x_depth_pixel , y_depth_pixel]여기 부분은 int형이 안들어가도 되지 않나? => int형 안하면 오류 발생하는지 확인 해보기
@@ -154,17 +154,18 @@ class Checkscale():
     def SetCameraConfig(self):
         sensor_dep = self.profile.get_device().first_depth_sensor()
         sensor_dep.set_option(rs.option.min_distance , 490)
-        sensor_dep.set_option(rs.option.visual_preset , 0.0)  
-        sensor_dep.set_option(rs.option.error_polling_enabled , 1)  
         sensor_dep.set_option(rs.option.enable_max_usable_range , 0.0)  
-        sensor_dep.set_option(rs.option.digital_gain , 1)  
-        sensor_dep.set_option(rs.option.laser_power , 89)  
-        sensor_dep.set_option(rs.option.confidence_threshold , 2)  
-        sensor_dep.set_option(rs.option.min_distance , 490)  
-        sensor_dep.set_option(rs.option.post_processing_sharpening , 1)  
-        sensor_dep.set_option(rs.option.pre_processing_sharpening , 2)  
-        sensor_dep.set_option(rs.option.noise_filtering , 3)  
+        sensor_dep.set_option(rs.option.visual_preset , 0.0)  
         sensor_dep.set_option(rs.option.invalidation_bypass , 1)  
+        sensor_dep.set_option(rs.option.error_polling_enabled , 1)  
+        sensor_dep.set_option(rs.option.digital_gain , 1)  
+        # sensor_dep.set_option(rs.option.receiver_gain , 10)  # 8~18
+        sensor_dep.set_option(rs.option.laser_power , 40)  # 0~100
+        sensor_dep.set_option(rs.option.confidence_threshold , 1)  
+        sensor_dep.set_option(rs.option.post_processing_sharpening , 1)  
+        sensor_dep.set_option(rs.option.pre_processing_sharpening , 1)  
+        sensor_dep.set_option(rs.option.noise_filtering , 2) 
+        
 
     def show(self):
         try:
@@ -183,21 +184,6 @@ class Checkscale():
                 depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
                 cv2.circle(color_image , (320,117) , 3 , (255,255,255) , 3)
                 
-    
-                # color_points = [
-                #     [400.0, 150.0],
-                #     [560.0, 150.0],
-                #     [560.0, 260.0],
-                #     [400.0, 260.0]
-                # ]                     
-                
-                # for color_point in color_points:
-                # # color에서의 픽셀좌표를 depth fream에서의 픽셀좌표로 변경 (rs.rs2_project_color_pixel_to_depth_pixel)
-                    
-                #     depth_point_ = self.project_color_pixel_to_depth_pixel(color_point , depth_frame)
-                #     cv2.circle(color_image , (int(color_point[0]) , int(color_point[1])) , radius =5 , color = (255,255,255) , thickness=-1)
-                #     cv2.circle(depth_colormap , (int(depth_point_[0]) , int(depth_point_[1])) , 5, (0,0,0) , -1)
-                    
                 
                 
                 if self.mouse_position != None:
@@ -208,13 +194,13 @@ class Checkscale():
                         
                         # depth_colormap 시각화
                         depth_pixel = self.project_color_pixel_to_depth_pixel(position , depth_frame)
-                        depth_pixel_tmp = self.project_color_pixel_to_depth_pixel((134,341) , depth_frame)
+                        
                         depth_pixel_round = list(map(lambda x : int(round(x,0)) , depth_pixel))
                         cv2.circle(depth_colormap, (int(depth_pixel_round[0]) , int(depth_pixel_round[1])) , 3 , (255,255,255) , -1)
                         
                         depth , depth_point = self.DeProjectDepthPixeltoDepthPoint(depth_pixel[0] , depth_pixel[1] , depth_frame)
                         
-                        depth_point_round = list(map(lambda x: round(x*100,3) ,  depth_point) )
+                        depth_point_round = list(map(lambda x: round(x*100,1) ,  depth_point) )
                         
                         cv2.putText(color_image , f"{str(round(depth_image[depth_pixel_round[1] , depth_pixel_round[0]]*self.depth_scale,3))}" , (position[0]-30,position[1]+10) ,cv2.FONT_ITALIC,0.5,(255,0,0),2)
                         cv2.putText(color_image , f"{str(depth_point_round)}" , (position[0]-80,position[1]+30) ,cv2.FONT_ITALIC,0.5,(255,0,0),2)
@@ -275,16 +261,37 @@ class Checkscale():
                     
                     cur_depth_pixel = self.project_color_pixel_to_depth_pixel(cur , depth_frame)
                     
+                    
+                    # # depth_colormap 시각화
+                    # depth_pixel = self.project_color_pixel_to_depth_pixel(position , depth_frame)
+                    
+                    # depth_pixel_round = list(map(lambda x : int(round(x,0)) , depth_pixel))
+                    # cv2.circle(depth_colormap, (int(depth_pixel_round[0]) , int(depth_pixel_round[1])) , 3 , (255,255,255) , -1)
+                    
+                    # depth , depth_point = self.DeProjectDepthPixeltoDepthPoint(depth_pixel[0] , depth_pixel[1] , depth_frame)
+                    
+                    # depth_point_round = list(map(lambda x: round(x*100,1) ,  depth_point) )
+                    cur_depth_pixel_round = list(map(lambda x : int(round(x,0)) , cur_depth_pixel))
                     # deprojection
-                    cur_depth , cur_depth_point = self.DeProjectDepthPixeltoDepthPoint(cur_depth_pixel[0] , cur_depth_pixel[1] , depth_frame)
-                            
+                    cur_depth , cur_depth_point = self.DeProjectDepthPixeltoDepthPoint(cur_depth_pixel_round[0] , cur_depth_pixel_round[1] , depth_frame)
+                    
+                    depth = depth_frame.get_distance(int(round(cur_depth_pixel[0],0)), int(round(cur_depth_pixel[1],0))) +  0.29 # 마커와 공압 그리퍼 말단부 길이 고려(29cm)
+                    depth_point = rs.rs2_deproject_pixel_to_point(self.depth_intrin, [int(cur_depth_pixel[0]), int(cur_depth_pixel[1])], depth) # depth 카메라의 픽셀과
+                     
+                    cur_depth_point_round = list(map(lambda x : round(x*100,1) , cur_depth_point))
+                    cur_depth_point_round2 =  list(map(lambda x : round(x*100,1) , depth_point))       
                     if self.print_flag is not None:
                         print("result!","*"*20)
                         print(f"cur_color_pixel = {cur[0] , cur[1]}")
                         print(f"cur_depth_pixel = {cur_depth_pixel}")
+                        print(f"cur_depth_pixel_round = {cur_depth_pixel_round}")
                         print(f"cur_depth = {depth_image[cur[1] , cur[0]]*self.depth_scale}")
+                        print(f"get_distance = {depth_frame.get_distance(cur_depth_pixel_round[0] , cur_depth_pixel_round[1])}")
                         print(f"depth_point = {cur_depth} ")
                         print(f"cur_depth_point = {cur_depth_point} ")
+                        print(f"cur_depth_point_round = {cur_depth_point_round} ")
+                        print(f"cur_depth_point_round2 = {cur_depth_point_round2} ")
+                      
                         
                         self.print_flag = None
                         
@@ -363,11 +370,12 @@ camera.show()
 
 
 # #depth 값 저장 ---------------------------------------
-frames = camera.pipeline.wait_for_frames()
-depth_frame = frames.get_depth_frame()
-depth_scale = camera.depth_scale
+# frames = camera.pipeline.wait_for_frames()
+# depth_frame = frames.get_depth_frame()
+# depth_scale = camera.depth_scale
 # time.sleep(3)
 # depth_image = np.round(np.asanyarray(depth_frame.get_data()) * depth_scale,3)
+# print(depth_image)
 
 ##  depth = depth_frame.get_distance(int(x_depth_pixel), int(y_depth_pixel))와 단순히 depth_frame.get_data()depth_scale 곱의 차이?
 # # import random
@@ -380,40 +388,42 @@ depth_scale = camera.depth_scale
 
 # np.save(r"C:\Users\11kkh\Desktop\yolov5\depth_array_noalign.npy" , depth_image)
 # print("save 완료!!")
-
-# depth =  np.load(r'C:\Users\11kkh\Desktop\yolov5\depth_array_noalign2.npy') # (280x380) # depth_image에서의 depth 값을 저장하는 배열
-# depth_point_array =  np.load(r'C:\Users\11kkh\Desktop\yolov5\depth_array_noalign3.npy')# (280x380) # color_image의 픽셀=> depth_image 픽셀변환 후 그때의 3D좌표의 dz값을 저장하는 배열
-# y = 100 ; x = 130
+# depth = np.zeros((211,261))
+# print(depth.shape)
+# # depth =  np.load(r'C:\Users\11kkh\Desktop\yolov5\depth_array_noalign2.npy') # (280x380) # depth_image에서의 depth 값을 저장하는 배열
+# # depth_point_array =  np.load(r'C:\Users\11kkh\Desktop\yolov5\depth_array_noalign3.npy')# (280x380) # color_image의 픽셀=> depth_image 픽셀변환 후 그때의 3D좌표의 dz값을 저장하는 배열
+# # x = 200~460
+# # y = 160 ~ 370
+# y = 160 ; x = 200
 # frames = camera.pipeline.wait_for_frames()
 # depth_frame = frames.get_depth_frame()
 # try:
 #     while 1:
-#         if not depth_frame :
-#                 continue
-#         depth_pixel = camera.project_color_pixel_to_depth_pixel( (x,y), depth_frame)
-#         _, depth_point = camera.DeProjectDepthPixeltoDepthPoint(depth_pixel[0] , depth_pixel[1] , depth_frame)
-#         depth_point_array[y-100,x-130] = round(depth_point[2],4)
+#         # if not depth_frame :
+#         #         continue
+#         distance = depth_frame.get_distance(x,y)
+#         depth[y-160,x-200] = round(distance*100,1)
 #         x += 1
-#         if x == 510:
+#         if x == 461:
 #             # print(depth[y-100,x-131] , depth[y-100,0])
 #             y +=1
-#             x =130
+#             x =200
 #             print(y)
-#             frames = camera.pipeline.wait_for_frames()
-#             depth_frame = frames.get_depth_frame()
+#             # frames = camera.pipeline.wait_for_frames()
+#             # depth_frame = frames.get_depth_frame()
             
             
-#         if y == 178 or y==258 or y ==349 or y==354:
-#             y+=1
-#             continue
-#         if y == 380:
+#         # if y == 178 or y==258 or y ==349 or y==354:
+#         #     y+=1
+#         #     continue
+#         if y == 371:
 #             break
         
        
 # finally :
 #     print("complete")
-#     # np.save(r"C:\Users\11kkh\Desktop\yolov5\depth_array_noalign2.npy" , depth)
-#     np.save(r"C:\Users\11kkh\Desktop\yolov5\depth_array_noalign3.npy" , depth_point_array)
+#     np.save(r"C:\Users\11kkh\Desktop\yolov5\depth_array_noalign2.npy" , depth)
+#     # np.save(r"C:\Users\11kkh\Desktop\yolov5\depth_array_noalign3.npy" , depth_point_array)
         
         
         
