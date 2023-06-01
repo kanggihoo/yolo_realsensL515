@@ -1,18 +1,17 @@
-import pyrealsense2 as rs
-import numpy as np
-import cv2
-import pandas as pd
-from pathlib import Path
-import time
-from tqdm import tqdm
-import datetime
-import keyboard
-
 import argparse
+import datetime
 import os
 import sys
+import time
 from pathlib import Path
+
+import cv2
+import keyboard
+import numpy as np
+import pandas as pd
+import pyrealsense2 as rs
 import torch
+from tqdm import tqdm
 
 FILE = Path(__file__).resolve() # 현재 파일의 전체 경로 (resolve() 홈디렉토리부터 현재 경로까지의 위치를 나타냄)
 ROOT = FILE.parents[0]  # YOLOv5 root directory , ROOT = 현재 파일의 부모 경로 
@@ -20,20 +19,27 @@ if str(ROOT) not in sys.path: # 시스템 path에 해당 ROOT 경로가 없으�
     sys.path.append(str(ROOT))  # add ROOT to PATH
 ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative (오른쪽 경로를 기준으로 했을 때 왼쪽 경로의 상대경로) => 현재 터미널상 디렉토리 위치와, 현재 파일의 부모경로와의 상대경로
 
-from models.common import DetectMultiBackend
-from utils.dataloaders import IMG_FORMATS, VID_FORMATS, LoadImages, LoadScreenshots, LoadStreams  # LoadImages랑 LoadStreams는 다시한번 보기 
-from utils.general import (LOGGER, Profile, check_file, check_img_size, check_imshow, check_requirements, colorstr, cv2,
-                           increment_path, non_max_suppression, print_args, scale_boxes, strip_optimizer, xyxy2xywh)
-from utils.plots import Annotator, colors, save_one_box
-from utils.torch_utils import select_device, smart_inference_mode
+import math
+
+import cv2
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 ####################################################################### camera setting
 import pyrealsense2 as rs
-import numpy as np
-import cv2
-import pandas as pd
-import matplotlib.pyplot as plt
-import math
+
+from models.common import DetectMultiBackend
 from utils.aruco_utils import ARUCO_DICT, aruco_display
+from utils.dataloaders import (IMG_FORMATS,  # LoadImages랑 LoadStreams는 다시한번 보기
+                               VID_FORMATS, LoadImages, LoadScreenshots,
+                               LoadStreams)
+from utils.general import (LOGGER, Profile, check_file, check_img_size,
+                           check_imshow, check_requirements, colorstr, cv2,
+                           increment_path, non_max_suppression, print_args,
+                           scale_boxes, strip_optimizer, xyxy2xywh)
+from utils.plots import Annotator, colors, save_one_box
+from utils.torch_utils import select_device, smart_inference_mode
+
 
 class BoxDetect():
     def __init__(self , save_video = 'False'):
@@ -65,7 +71,7 @@ class BoxDetect():
         config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30) # 640*360 , 640*480 , 960*540 , 1280*720 , 1920*1080
         self.profile = self.pipeline.start(config)
         
-        self.hight_compensation_value = 0.02 # 1cm
+        self.hight_compensation_value = 0.04 # 4cm
         
         # self.GetCameraConfig()
     def Model_cofig(self): ####################################################################### 변수 초기화
@@ -89,79 +95,82 @@ class BoxDetect():
         type = "DICT_5X5_100"
         arucoDict = cv2.aruco.Dictionary_get(ARUCO_DICT[type])
         arucoParams = cv2.aruco.DetectorParameters_create()
-        self.x_ref, self.y_ref , self.z_ref = (0,0,0)
-        # while 1: 
-        #     frames = self.pipeline.wait_for_frames()
-        #     color_frame = frames.get_color_frame()
-        #     color_image = np.asanyarray(color_frame.get_data())
-        #     corners, ids, rejected = cv2.aruco.detectMarkers(color_image, arucoDict, parameters=arucoParams)
-        #     if len(corners) ==0:
-        #         print(f"NO aruco marker!!")
-        #         continue
+        
+        while 1: 
+            frames = self.pipeline.wait_for_frames()
+            color_frame = frames.get_color_frame()
+            color_image = np.asanyarray(color_frame.get_data())
+            corners, ids, rejected = cv2.aruco.detectMarkers(color_image, arucoDict, parameters=arucoParams)
+            if len(corners) ==0:
+                print(f"NO aruco marker!!")
+                continue
             
-        #     x1 , y1 = corners[0].reshape(4,2)[0]
-        #     x2, y2 = corners[0].reshape(4,2)[2]
-        #     self.center_x , self.center_y = int(round((x2+x1)/2,0)) , int(round((y2+y1)/2,0))
+            x1 , y1 = corners[0].reshape(4,2)[0]
+            x2, y2 = corners[0].reshape(4,2)[2]
+            self.center_x , self.center_y = int(round((x2+x1)/2,0)) , int(round((y2+y1)/2,0))
             
-        #     depth_frame = self.pipeline.wait_for_frames().get_depth_frame()
-        #     depth_pixel = self.project_color_pixel_to_depth_pixel((self.center_x,self.center_y) , depth_frame)
+            depth_frame = self.pipeline.wait_for_frames().get_depth_frame()
+            depth_pixel = self.project_color_pixel_to_depth_pixel((self.center_x,self.center_y) , depth_frame)
             
-        #     ## 기존 방법(나중에 z_point만 기구부 길이 반영)
-        #     _, depth_point = self.DeProjectDepthPixeltoDepthPoint(depth_pixel[0] , depth_pixel[1] , depth_frame )
+            ## 기존 방법(나중에 z_point만 기구부 길이 반영)
+            _, depth_point = self.DeProjectDepthPixeltoDepthPoint(depth_pixel[0] , depth_pixel[1] , depth_frame )
+        
+            ## 마커 말단부 기준으로
+            # depth = depth_frame.get_distance(int(round(depth_pixel[0],0)), int(round(depth_pixel[1],0))) +  0.29 # 마커와 공압 그리퍼 말단부 길이 고려(29cm)
+            # depth_point = rs.rs2_deproject_pixel_to_point(self.depth_intrin, [int(depth_pixel[0]), int(depth_pixel[1])], depth) # depth 카메라의 픽셀과
             
-        #     ## 마커 말단부 기준으로
-        #     # depth = depth_frame.get_distance(int(round(depth_pixel[0],0)), int(round(depth_pixel[1],0))) +  0.29 # 마커와 공압 그리퍼 말단부 길이 고려(29cm)
-        #     # depth_point = rs.rs2_deproject_pixel_to_point(self.depth_intrin, [int(depth_pixel[0]), int(depth_pixel[1])], depth) # depth 카메라의 픽셀과
+            depth_point[2] += 0.272 # 마커를 바닥에 붙힐때 지면과 공압 그리퍼 말단부와 떨어진 거리를 빼주어야 말단부의 Z기준점이 생성된다. 
             
-        #     depth_point[2] += 0.29
+            # ## depth_point => color point 변화
+            color_point = self.depth_point_to_color_point(depth_point)
+            self.x_ref_color, self.y_ref_color , self.z_ref_color = round(color_point[1]*100,1) , round(color_point[0]*100,1) , round(color_point[2]*100 , 1)
+            print(f"기준좌표_color : {self.x_ref_color,self.y_ref_color,self.z_ref_color}")
             
-        #     ## depth_point => color point 변화
-        #     color_point = self.depth_point_to_color_point(depth_point)
-        #     self.x_ref_color, self.y_ref_color , self.z_ref_color = round(color_point[1]*100,1) , round(color_point[0]*100,1) , round(color_point[2]*100 , 1)
-        #     print(f"기준좌표_color : {self.x_ref_color,self.y_ref_color,self.z_ref_color}")
-            
-        #     ##  depth_point => color point 변화 하지 않고
-        #     self.x_ref, self.y_ref , self.z_ref  = round(depth_point[1]*100,1) , round(depth_point[0]*100,1) , round(depth_point[2]*100 , 1)
-        #     print(f"기준좌표 : {self.x_ref,self.y_ref,self.z_ref}")
-   
-            
-        #     break
+            ##  depth_point => color point 변화 하지 않고
+            # self.x_ref, self.y_ref , self.z_ref  = round(depth_point[1]*100,1)-2.6 , round(depth_point[0]*100,1)+2 , round(depth_point[2]*100 , 1)
+            self.x_ref, self.y_ref , self.z_ref  = round(depth_point[1]*100,1) , round(depth_point[0]*100,1) , round(depth_point[2]*100 , 1)
+            print(f"기준좌표 : {self.x_ref,self.y_ref,self.z_ref}")
+            break
     # 그리퍼 24.5 + 공압 그리퍼 4.5 = 29cm => 모터 원점복귀 위치에서 마커랑 카메라가 일직선 상에 위치하도록 카메라 지지대 위치 조정  
     # 공압 그리퍼 중심이 모터 중심보다 1.35mm 앞에 있음. (로봇 좌표계상 x축은 조금 다르고 , y축은 동일)
-    # def Aruco_detect_reset(self):
+    def Aruco_detect_reset(self):
         
-    #     type = "DICT_5X5_100"
-    #     arucoDict = cv2.aruco.Dictionary_get(ARUCO_DICT[type])
-    #     arucoParams = cv2.aruco.DetectorParameters_create()
-    #     while 1: 
-    #         frames = self.pipeline.wait_for_frames()
-    #         color_frame = frames.get_color_frame()
-    #         color_image = np.asanyarray(color_frame.get_data())
-    #         corners, ids, rejected = cv2.aruco.detectMarkers(color_image, arucoDict, parameters=arucoParams)
-    #         if len(corners) ==0:
-    #             print(f"NO aruco marker!!")
-    #             continue
-    #         x1 , y1 = corners[0].reshape(4,2)[0]
-    #         x2, y2 = corners[0].reshape(4,2)[2]
-    #         center_x , center_y = int((x2+x1)/2) , int((y2+y1)/2)
+        type = "DICT_5X5_100"
+        arucoDict = cv2.aruco.Dictionary_get(ARUCO_DICT[type])
+        arucoParams = cv2.aruco.DetectorParameters_create()
+        while 1: 
+            frames = self.pipeline.wait_for_frames()
+            color_frame = frames.get_color_frame()
+            color_image = np.asanyarray(color_frame.get_data())
+            corners, ids, rejected = cv2.aruco.detectMarkers(color_image, arucoDict, parameters=arucoParams)
+            if len(corners) ==0:
+                print(f"NO aruco marker!!")
+                continue
+            x1 , y1 = corners[0].reshape(4,2)[0]
+            x2, y2 = corners[0].reshape(4,2)[2]
+            center_x , center_y = int(round((x2+x1)/2,0)) , int(round((y2+y1)/2,0))
             
-    #         depth_frame = self.pipeline.wait_for_frames().get_depth_frame()
-    #         depth_pixel = self.project_color_pixel_to_depth_pixel((center_x,center_y) , depth_frame)
+            depth_frame = self.pipeline.wait_for_frames().get_depth_frame()
+            depth_pixel = self.project_color_pixel_to_depth_pixel((center_x,center_y) , depth_frame)
             
-    #         ## 기존 방법
-    #         _, depth_point = self.DeProjectDepthPixeltoDepthPoint(depth_pixel[0] , depth_pixel[1] , depth_frame )
+            ## 기존 방법
+            _, depth_point = self.DeProjectDepthPixeltoDepthPoint(depth_pixel[0] , depth_pixel[1] , depth_frame )
             
-    #         ## 마커 말단부 기준으로
-    #         # depth = depth_frame.get_distance(int(round(depth_pixel[0],0)), int(round(depth_pixel[1],0))) +  0.29 # 마커와 공압 그리퍼 말단부 길이 고려(29cm)
-    #         # depth_point = rs.rs2_deproject_pixel_to_point(self.depth_intrin, [int(depth_pixel[0]), int(depth_pixel[1])], depth) # depth 카메라의 픽셀과
+            ## 마커 말단부 기준으로
+            depth = depth_frame.get_distance(int(round(depth_pixel[0],0)), int(round(depth_pixel[1],0)))  # 마커와 공압 그리퍼 말단부 길이 고려(29cm)
+            depth_point = rs.rs2_deproject_pixel_to_point(self.depth_intrin, [int(depth_pixel[0]), int(depth_pixel[1])], depth) # depth 카메라의 픽셀과
             
-    #         depth_point[2] += 0.29
-    #         color_point = self.depth_point_to_color_point(depth_point)
-    #         self.x_ref, self.y_ref , self.z_ref  = round(color_point[1]*100,1) , round(color_point[0]*100,1) , round(color_point[2]*100 , 1)
-    #         print(f"기준좌표 : {self.x_ref,self.y_ref,self.z_ref}")
+            depth_point[2] += 0.272
+            color_point = self.depth_point_to_color_point(depth_point)
+            self.x_ref, self.y_ref , self.z_ref  = round(depth_point[1]*100,1) , round(depth_point[0]*100,1) , round(depth_point[2]*100 , 1)
+            print(f"기준좌표 : {self.x_ref,self.y_ref,self.z_ref}")
+            
+            self.x_ref_color, self.y_ref_color , self.z_ref_color = round(color_point[1]*100,1) , round(color_point[0]*100,1) , round(color_point[2]*100 , 1)
+            print(f"기준좌표_color : {self.x_ref_color,self.y_ref_color,self.z_ref_color}")
+            
    
             
-    #         break
+            break
         
     
     def CalculateAngle(self , xyxy , depth_frame , center_distance , depth_colormap):
@@ -183,10 +192,10 @@ class BoxDetect():
         depth_pixel2 = list(map(lambda x : int(round(x,0)) , depth_pixel2))
         
         # 관찰할 depth 영역 확인 
-        spare_roi = 10
+        spare_roi = 10 # 10pixel
         depth_rect = depth_image[depth_pixel1[1]-spare_roi : depth_pixel2[1]+spare_roi , depth_pixel1[0]-spare_roi : depth_pixel2[0]+spare_roi]
-        depth_rect = np.where((depth_rect >= center_distance-2) & (depth_rect <= center_distance+2) ,255, 0) # 이진화 작업
-        depth_rect = depth_rect.astype(np.uint8)  
+        depth_rect = np.where((depth_rect >= center_distance-1) & (depth_rect <= center_distance+1) ,255, 0) # 이진화 작업 depth 값이 중심-2 ~ 중심+2 사이면 255(흰) 아니면 0(검)
+        depth_rect = depth_rect.astype(np.uint8)  # float => uint8로변경
         
         # 전처리 
         depth_rect_original = cv2.morphologyEx(depth_rect , cv2.MORPH_OPEN , (5,5) ,iterations=2)
@@ -201,68 +210,42 @@ class BoxDetect():
         ## 방법2 근사화
         rect = cv2.minAreaRect(largest_contour)
         box = cv2.boxPoints(rect)
-        box = np.intp(box)
+        box = np.intp(np.round(box)) # box 좌표 정수화
         cv2.drawContours(depth_rect , [box] , -1 , (0,0,255) , 3 ) # 근사화한 사각형에 대한 시각화 
         
         # 
         first_pixel , second_pixel , third_pixel , last_pixel = box
-        depth = center_distance/100
+        depth = center_distance/100 # center_distance는 cm단위여서 m단위로 변경 => 근사화한 box의 4개 좌표와 중심 depth를 가지는 점에서의 포인트 좌표로 변환 
         first_Point , second_Point , third_Point , last_Point = [rs.rs2_deproject_pixel_to_point(self.depth_intrin, [int(i[0]), int(i[1])], depth) for i in [first_pixel , second_pixel , third_pixel , last_pixel]]
         
 
-        ## 회전방향 확인
-        direction  = None
-        if first_pixel[1] == second_pixel[1]: # 둘이 y좌표값이 같은 경우
-            direction = 'NO_rotate'
-        elif first_pixel[1] >= second_pixel[1]:
-            direction ='CCW'
-        else:
-            direction ='CW'
-
+        ## 회전방향 확인 => 각 꼭짓점 3차원 변환 후 회전각도 계산
+        angle_point = 0
         
-        height , width = 0 ,0
-        if direction == 'No_rotate':
-            width = abs(first_Point[0]-second_Point[0] )
-            height = abs(third_Point[1] - second_Point[1])
-        elif direction == 'CW':
-            height = math.sqrt( (second_Point[0] - third_Point[0])**2 + (second_Point[1] - third_Point[1])**2)
-            width = math.sqrt( (second_Point[0] - first_Point[0])**2 + (second_Point[1] - first_Point[1])**2)
-            cv2.line(depth_rect , second_pixel , third_pixel , (255,0,0),3 ) # height(blue)
-            cv2.line(depth_rect , first_pixel , second_pixel , (0,0,255),3 ) # width(red)
-        elif direction =='CCW':
-            height = math.sqrt( (second_Point[0] - first_Point[0])**2 + (second_Point[1] - first_Point[1])**2)
-            width = math.sqrt( (second_Point[0] - third_Point[0])**2 + (second_Point[1] - third_Point[1])**2)
-            cv2.line(depth_rect , first_pixel , second_pixel , (255,0,0) ,2) # height(blue)
-            cv2.line(depth_rect , second_pixel , third_pixel ,(0,0,255) ,2) # width(red)
-            
-        print(f"box_point : {box}")
-        print(f"height , width : {height} , {width}")
-        print(f"dircetion : {direction}")
+        ## 3D 포인터로 변경 후 각도 계산
+        if first_Point[1] > second_Point[1] : # 회전이 발생
+            if  ((second_Point[0] - first_Point[0])**2 + (second_Point[1] - first_Point[1])**2) < ((second_Point[0] - third_Point[0])**2 + (second_Point[1] - third_Point[1])**2):
+                angle_point = math.atan2(-(second_Point[1]-first_Point[1]) , second_Point[0] - first_Point[0])*180/math.pi+90
+            elif ((second_Point[0] - first_Point[0])**2 + (second_Point[1] - first_Point[1])**2) > ((second_Point[0] - third_Point[0])**2 + (second_Point[1] - third_Point[1])**2):
+                angle_point = math.atan2(-(second_Point[1]-first_Point[1]) , second_Point[0] - first_Point[0])*180/math.pi
+            else : # 길이 같은 경우 
+                angle_point = math.atan2(-(second_Point[1]-first_Point[1]) , second_Point[0] - first_Point[0])*180/math.pi # 예각, 둔각 다 가능하지만 예각만 회전
+                
+        elif first_Point[1] == second_Point[1]: ## 회전하지 않은 경우
+            if  ((second_Point[0] - first_Point[0])**2 + (second_Point[1] - first_Point[1])**2) < ((second_Point[0] - third_Point[0])**2 + (second_Point[1] - third_Point[1])**2): # height > width 
+                angle_point = 90
+            elif ((second_Point[0] - first_Point[0])**2 + (second_Point[1] - first_Point[1])**2) > ((second_Point[0] - third_Point[0])**2 + (second_Point[1] - third_Point[1])**2):
+                angle_point = 0
+            else : # height == width 
+                angle_point = 0
+        
+        angle_point = round(angle_point,0)
 
-        # 각도 계산
-        angle = 0
-        if direction == 'NO_rotate':
-            angle = 0
-            if height > width:
-                angle += 90
-        elif direction =='CW':
-            angle = round(math.atan2(-(second_Point[1] - first_Point[1]) , second_Point[0] - first_Point[0])*180/math.pi)
-            if height > width:
-                angle += 90
-        elif direction =='CCW':
-            angle =  90 -round(math.atan2(-(second_Point[1] - first_Point[1]) , second_Point[0] - first_Point[0])*180/math.pi)
-            if height > width:
-                angle += 90
-        if angle > 90 and angle < 180:
-            angle = 180-angle
-            if direction =='CCW':
-                direction ='CW'
-            elif direction =='CW':
-                direction ='CCW'
-        print(f"angle : {angle}")
+        print(f"angle_point {angle_point}")
+        
         ## 최종 center 좌표 검사 => 4개 꼭짓점 x,y의 평균으로 rect상에서 중심점 구하기 => 실제 depth 프레임에서 중심점 => 
         center = [int(round(i,0)) for i in [np.mean(box[:,0]) , np.mean(box[:,1])]]  # depth rect에서의 중심점
-        new_center_depth =( center[0] + depth_pixel1[0]-spare_roi , center[1] + depth_pixel1[1] - spare_roi) # depth frame에서의 depth 좌표
+        new_center_depth =( center[0] + depth_pixel1[0]-spare_roi , center[1] + depth_pixel1[1] - spare_roi) # depth frame에서의 depth 좌표 (적재물 중심 좌표)
         
         
         cv2.circle(depth_colormap , new_center_depth , 3 , (0,0,255) , -1)
@@ -270,28 +253,28 @@ class BoxDetect():
         _ , new_center_point = self.DeProjectDepthPixeltoDepthPoint(new_center_depth[0] , new_center_depth[1] , depth_frame , depth)
         
         # depth point로 기준점으로 부터 움직여야 하는 최종 거리 계산
-        new_depth_point = ( round(abs(self.x_ref - round(new_center_point[1]*100,1)),1) , 
-                             round(abs(self.y_ref - round(new_center_point[0]*100 , 1)),1) ,
-                              round(abs(self.z_ref - round(new_center_point[2]*100,1)),1) )
-        print(f"pre depth_center_pixel = {(depth_pixel1[0] + depth_pixel2[0])/2 , (depth_pixel1[1] + depth_pixel2[1])/2 }")
-        print(f"new depth_center_pixel = {new_center_depth }")
-        print(f"new_center_point : {new_center_point}")
-        print(f"new_move_point_depth : {new_depth_point}")
+        new_depth_point = ( round(self.x_ref - new_center_point[1]*100,1) , 
+                             round(self.y_ref - new_center_point[0]*100 , 1) ,
+                              round(self.z_ref - new_center_point[2]*100,1))
+        # print(f"pre depth_center_pixel = {(depth_pixel1[0] + depth_pixel2[0])/2 , (depth_pixel1[1] + depth_pixel2[1])/2 }")
+        # print(f"new depth_center_pixel = {new_center_depth }")
+        # print(f"new_center_point : {new_center_point}") # 새롭게 생긴 박스의 중심점을 카메라 중심 기준 3D 좌표계
+        # print(f"new_move_point_depth : {new_depth_point}") # 3D 기준점 , 새롭게 생긴 3D 박스 중심과 떨어진 거리 
         
         # depth_point => color_point 변화 
         new_color_point = self.depth_point_to_color_point(new_center_point)
-        print(f"new_color_point : {new_color_point}")
+        # print(f"new_color_point : {new_color_point}")
         
-        new_color_point = ( round(abs(self.x_ref - round(new_color_point[1]*100,1)),1) , 
-                             round(abs(self.y_ref - round(new_color_point[0]*100 , 1)),1) ,
-                              round(abs(self.z_ref - round(new_color_point[2]*100,1)),1) )
-        # print(f"pre depth_center_pixel = {(depth_pixel1[0] + depth_pixel2[0])/2 , (depth_pixel1[1] + depth_pixel2[1])/2 }")
-        # print(f"new depth_center_pixel = {new_center_depth }")
+        new_color_point = ( round(abs(self.x_ref_color - round(new_color_point[1]*100,1)),1) , 
+                             round(abs(self.y_ref_color - round(new_color_point[0]*100 , 1)),1) ,
+                              round(abs(self.z_ref_color - round(new_color_point[2]*100,1)),1) )
+        # # print(f"pre depth_center_pixel = {(depth_pixel1[0] + depth_pixel2[0])/2 , (depth_pixel1[1] + depth_pixel2[1])/2 }")
+        # # print(f"new depth_center_pixel = {new_center_depth }")
         print(f"new_move_point_color : {new_color_point}")
         
         
         
-        return depth_colormap , depth_rect ,depth_rect_original , direction , angle , new_depth_point
+        return depth_colormap , depth_rect ,depth_rect_original , angle_point , new_depth_point
     def project_color_pixel_to_depth_pixel(self , color_point, depth_frame)-> float: # color pixel점을  depth pixel로 매핑 
         '''
         ## input
@@ -342,7 +325,7 @@ class BoxDetect():
         return
         1. color_pixel : color_frame에서 point에 대응하는 pixel 값
         '''
-        color_pixel = rs.rs2_project_point_to_pixel(self.color_intrin, color_point)
+        color_pixel = rs.rs2_projectrr_point_to_pixel(self.color_intrin, color_point)
         return color_pixel
     def GetCameraConfig(self):
         sensor_dep = self.profile.get_device().first_depth_sensor()
@@ -373,13 +356,13 @@ class BoxDetect():
         sensor_dep.set_option(rs.option.visual_preset , 0.0)  
         sensor_dep.set_option(rs.option.error_polling_enabled , 1)  
         sensor_dep.set_option(rs.option.enable_max_usable_range , 0.0)  
-        sensor_dep.set_option(rs.option.digital_gain , 1)  
+        sensor_dep.set_option(rs.option.digital_gain , 0)  
         sensor_dep.set_option(rs.option.laser_power , 89)  
         sensor_dep.set_option(rs.option.confidence_threshold , 2)  
         sensor_dep.set_option(rs.option.min_distance , 490)  
         sensor_dep.set_option(rs.option.post_processing_sharpening , 1)  
         sensor_dep.set_option(rs.option.pre_processing_sharpening , 2)  
-        sensor_dep.set_option(rs.option.noise_filtering , 3)  
+        sensor_dep.set_option(rs.option.noise_filtering , 2)  
         sensor_dep.set_option(rs.option.invalidation_bypass , 1)  
     # def Transform_depthpoint_color_pixel(self,depth_point):
     #     color_point = self.depth_point_to_color_point(depth_point):
@@ -480,8 +463,9 @@ class BoxDetect():
                             # if distance < 0.9 and center[0] < 529:
                             centers.append(center)
                             distances.append(round(distance,3))
-                            labels.append(self.names[c])
                             x1y1x2y2.append([x1,y1,x2,y2])
+                            # if self.names[c] ==
+                            labels.append(self.names[c])
                             
                                     
                 # Stream results (webcam 화면 으로 부터받은 결과를 출력)
@@ -505,7 +489,9 @@ class BoxDetect():
             # 여러개 인식했지만 거기에 팔렛트 , 박스 포함된 경우 => 지금 그대로 
             
             if len(results['idx']) > 1 :
-                df = pd.DataFrame(results).sort_values(by = ['center_y' , 'center_x'])
+                df = pd.DataFrame(results) # result를 데이터 프레임으로 만듬
+                df = df.loc[df['label']=='box'] # 'box'로 인식한것만 저장
+                df= df.sort_values(by = ['center_y' , 'center_x']) # center_y , center_x로 정렬 
                 # for i in range(len(df)):
                 #     cv2.putText(origin_color_image , str(df['idx'][i]) , (df['center_x'][i] , df['center_y'][i]) , cv2.FONT_HERSHEY_COMPLEX , 1 , (255,255,255))
                 min_distance_idx = df.iloc[np.argmin(df['distance'].values), 0]
@@ -518,7 +504,7 @@ class BoxDetect():
                 else:
                     for i in df.index:
                         if i != min_distance_idx:
-                            if df['distance'][i] - self.hight_compensation_value > min_distance:
+                            if df['distance'][i] - self.hight_compensation_value > min_distance: # hight_compensation_value:4cm(최소 최상단 박스보다 4cm 아래에 있는것은 제외)
                                 df.drop(index = i , axis = 0 , inplace=True)
                     final_idx = df.iloc[0,0]
                     cv2.putText(origin_color_image , "first" , (df['center'][final_idx][0]-40 , df['center'][final_idx][1]+10) , cv2.FONT_ITALIC,1.4,(255,0,0),3 )
@@ -526,12 +512,21 @@ class BoxDetect():
                 first_pick_depth_pixel = self.project_color_pixel_to_depth_pixel(df['center'][final_idx] , depth_frame )
                 _ , first_pick_depth_point = self.DeProjectDepthPixeltoDepthPoint(first_pick_depth_pixel[0] ,first_pick_depth_pixel[1] , depth_frame )
                 
-                ## depth_point => color_point 변환 
+                # depth_point => color_point 변환 
                 # first_pick_color_point = self.depth_point_to_color_point(first_pick_depth_point)
                 # print(f"first_pick_color_point : {first_pick_color_point}")
                 
                 ## depth_point => color_point 변환x
                  # print(f"first_pick_depth_point : {first_pick_depth_point}")
+                # first_pick2 = {
+                #     'x' : round(abs(self.x_ref_color - round(first_pick_color_point[1]*100,1)),1),
+                #     'y' : round(abs(self.y_ref_color - round(first_pick_color_point[0]*100 , 1)),1),
+                #     'z' : round(abs(self.z_ref_color - round(first_pick_color_point[2]*100,1)),1),
+                #     'center' : df['center'][final_idx],
+                #     'x1y1x2y2' : df['x1y1x2y2'][final_idx],
+                #     "depth_from_camera" : round(first_pick_color_point[2]*100,1),
+                #     'label' : df['label'][final_idx]
+                # }
                 
                 first_pick = {
                     'x' : round(abs(self.x_ref - round(first_pick_depth_point[1]*100,1)),1),
@@ -543,8 +538,8 @@ class BoxDetect():
                     'label' : df['label'][final_idx]
                 }
                 print(f"frist_pick: {first_pick}")
-                depth_colormap , self.depth_rect , self.depth_rect_original , direction , angle, new_move_point = self.CalculateAngle(first_pick['x1y1x2y2'] , depth_frame , first_pick['depth_from_camera'], depth_colormap)
-                print(f"new_move_point : {new_move_point}")
+                depth_colormap , self.depth_rect , self.depth_rect_original , angle, new_move_point = self.CalculateAngle(first_pick['x1y1x2y2'] , depth_frame , first_pick['depth_from_camera'], depth_colormap)
+                print(f"new_move_point_depth : {new_move_point}")
                 
             elif len(results['idx']) == 1: # 총 1개만 인식한 경우 
                 if results["label"][0] == 'box': # 1개 인식했는데 box인경우 
@@ -568,7 +563,7 @@ class BoxDetect():
                         'label' : results['label'][0]
                     }
                     print(f"frist_pick: {first_pick}")
-                    depth_colormap , self.depth_rect , self.depth_rect_original , direction , angle, new_move_point = self.CalculateAngle(first_pick['x1y1x2y2'] , depth_frame , first_pick['depth_from_camera'], depth_colormap)
+                    depth_colormap , self.depth_rect , self.depth_rect_original ,  angle, new_move_point = self.CalculateAngle(first_pick['x1y1x2y2'] , depth_frame , first_pick['depth_from_camera'], depth_colormap)
                     print(f"new_move_point : {new_move_point}")
                 elif results['label'][0] == 'pallete': # 1개 인식했고, pallete만 남은경우 
                     first_pick = {
@@ -613,7 +608,7 @@ class BoxDetect():
                     cv2.imshow("depth" ,depth_colormap)
                     
                     cv2.imshow("dpeth_crop" , self.depth_rect)
-                    # cv2.imshow("rect" , depth_rect)
+
                         
 
                     if cv2.waitKey(1) == ord('c'):

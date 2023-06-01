@@ -62,6 +62,7 @@ sensor_dep.set_option(rs.option.invalidation_bypass , 1)
 def mouse_click(event , x,y,flags , param):
     if event == cv2.EVENT_LBUTTONDOWN:
         xy_depth = aligned_depth_frame.get_distance(x, y)
+        
         xy_3Dpoint = rs.rs2_deproject_pixel_to_point(depth_intrin, [x, y], xy_depth)
         print("mouse_x_y : ", (x,y) ,"distance : ", xy_depth , "x_y_3D : ",xy_3Dpoint)
         center_depth = aligned_depth_frame.get_distance(319, 239)
@@ -85,6 +86,7 @@ try:
 
     # # Get aligned frames
     aligned_depth_frame = aligned_frames.get_depth_frame() # aligned_depth_frame is a 640x480 depth image
+    depth_intrin = aligned_depth_frame.profile.as_video_stream_profile().intrinsics
     color_frame = aligned_frames.get_color_frame()
 
     depth_image = np.asanyarray(aligned_depth_frame.get_data())
