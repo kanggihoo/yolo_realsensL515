@@ -34,4 +34,5 @@ yolov5 intelrealsense L515
 3. def Aruco_detect() 부분의 depth_point[2] 부분 변경사항 있으면 변경
 4. def Aruco_detect_reset() 부분은 없어도됨
 5. 모델 반환되는 명칭 주의 "box", "pallet"
-6. 반환되는 각도 float형태인지 확인 
+6. 반환되는 각도 float형태인지 확인
+7. 현재 윈도우 환경에서의 def Run() 부분은 다름
