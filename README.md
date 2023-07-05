@@ -26,3 +26,9 @@ yolov5 intelrealsense L515
      - source 가상환경폴더/bin/activate 입력 , python interpreter를 가상환경 이름으로 설정
 ## 가상환경 비활성화 
    - deactivate
+
+
+## 파이썬 코드 ROS로 옮길 때 참조사항
+1. __init__() 부분은 건드리지 말것
+2. def Model_config() 에서는 weights 파일 이름은 메일로 보낼 때 best.pt변경 및 모델 가중치가 저장된 config 디렉토리의 가중치 파일 이름 변경
+3. 
