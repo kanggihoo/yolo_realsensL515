@@ -42,7 +42,7 @@ from utils.plots import Annotator, colors, save_one_box
 from utils.torch_utils import select_device, smart_inference_mode
 
 
-class BoxDetect():
+class BoxDetect(): # __init__ 부분은 건드리지 말고 
     def __init__(self , save_video = 'False'):
         self.Camera_cofig()
         self.model = self.Model_cofig()
