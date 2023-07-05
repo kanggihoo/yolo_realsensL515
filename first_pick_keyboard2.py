@@ -306,7 +306,7 @@ class BoxDetect(): # __init__ 부분은 건드리지 말고
         return IOU
     def FindAngle(self, box_point):
         first_Point , second_Point , third_Point , last_Point = box_point
-        angle = 0
+        angle = 0.0
         add_90angle = False
         if first_Point[1] > second_Point[1]: # 회전한 경우 
             if  ((second_Point[0] - first_Point[0])**2 + (second_Point[1] - first_Point[1])**2) < ((second_Point[0] - third_Point[0])**2 + (second_Point[1] - third_Point[1])**2):# height > width 
@@ -318,12 +318,12 @@ class BoxDetect(): # __init__ 부분은 건드리지 말고
                 angle = math.atan2(-(second_Point[1]-first_Point[1]) , second_Point[0] - first_Point[0])*180/math.pi # 회전했는데 가로, 세로길이 같은경우에는 예각, 둔각 회전 가능하지만 예각으로 회전
         elif first_Point[1] == second_Point[1]: ## 회전하지 않은 경우
             if  ((second_Point[0] - first_Point[0])**2 + (second_Point[1] - first_Point[1])**2) < ((second_Point[0] - third_Point[0])**2 + (second_Point[1] - third_Point[1])**2): # height > width 
-                angle = 90
+                angle = 90.0
                 add_90angle = True
             elif ((second_Point[0] - first_Point[0])**2 + (second_Point[1] - first_Point[1])**2) > ((second_Point[0] - third_Point[0])**2 + (second_Point[1] - third_Point[1])**2):
-                angle = 0
+                angle = 0.0
             else : # height == width 
-                angle = 0
+                angle = 0.0
         return round(angle,1) , add_90angle
     
     def CalculateAngle(self , xyxy , depth_frame , center_distance):
@@ -589,7 +589,7 @@ class BoxDetect(): # __init__ 부분은 건드리지 말고
             line_thickness=1,  # bounding box thickness (pixels)
             ):
             
-            seen, windows, dt = 0, [], (Profile(), Profile(), Profile())
+            # seen, windows, dt = 0, [], (Profile(), Profile(), Profile())
             ## align 
             
             frames = self.pipeline.wait_for_frames()
