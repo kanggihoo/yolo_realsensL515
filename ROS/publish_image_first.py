@@ -40,7 +40,8 @@ from cv_bridge import CvBridge
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup
 
-
+# weights 파일 이름 변경하고, 
+# 
 
 # 모델 관련해서 이미지 받아오고 , yolov5 모델을 통해 최종 박스 정보 return
 class yolov5_demo():

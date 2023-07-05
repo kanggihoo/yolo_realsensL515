@@ -5,10 +5,14 @@ import pandas as pd
 from pathlib import Path
 import time
 from tqdm import tqdm
+from utils.aruco_utils import ARUCO_DICT, aruco_display
+import math
+import keyboard
 
 class Checkscale():
     def __init__(self):
         self.camera_config()
+        # self.Aruco_detect()
         
         self.depth_scale = self.profile.get_device().first_depth_sensor().get_depth_scale()    
         self.mouse_position = []
@@ -29,55 +33,38 @@ class Checkscale():
         self.df = pd.DataFrame(columns = ['cur_pixel' , 'pre_pixel' , 'dx_pixel' , 'dy_pixel' , 'dx_point' , 'dy_point' , 'dz_point' ])
         
         self.SetCameraConfig()
-        self.GetCameraConfig()
-        # print(f"depth_intrin : {self.depth_intrin}")
+        # self.GetCameraConfig()
         
-        # print(f"color_intrin : {self.color_intrin}")
-        # print(f"depth_to_color_extrin : {self.depth_to_color_extrin}")
-        # print(f"color_to_depth_extrin : {self.color_to_depth_extrin}")
+    def Aruco_detect(self):
+        type = "DICT_5X5_100"
+        arucoDict = cv2.aruco.Dictionary_get(ARUCO_DICT[type])
+        arucoParams = cv2.aruco.DetectorParameters_create()
+        
+        while 1: 
+            frames = self.pipeline.wait_for_frames()
+            color_frame = frames.get_color_frame()
+            color_image = np.asanyarray(color_frame.get_data())
+            corners, ids, rejected = cv2.aruco.detectMarkers(color_image, arucoDict, parameters=arucoParams)
+            
+            if len(corners) ==0:
+                print(f"NO aruco marker!!")
+                continue
+            
+            corners = np.array(corners).reshape((4, 2))
+            (topLeft, topRight, bottomRight, bottomLeft) = corners 
+            topRight = (int(topRight[0]), int(topRight[1]))
+            bottomRight = (int(bottomRight[0]), int(bottomRight[1]))
+            bottomLeft = (int(bottomLeft[0]), int(bottomLeft[1]))
+            topLeft = (int(topLeft[0]), int(topLeft[1]))
+            
+            center = int(corners[:,0].mean()), int(corners[:,1].mean())
+            angle =math.atan2(-(topRight[1]-topLeft[1]),(topRight[0] - topLeft[0]))*180/math.pi
+            print(f"center : {center}")
+            print(f"angle : {angle}")
+            
 
-    # def Drawline_pixel(self , image , start:int , num_pixel:int , direction = 'x' ):
-    #     '''
-    #     앞에서 구한 pixel2cm에 맞게 직선을 그려주는 함수
-    #     # input : numpy array 배열
-    #     # start : 직선의 시작 위치 
-    #     # direction : 'x' or 'y' 빙향
-    #     # num_pixel : self.pixel2cm의 몇 배를 할 것인지 
-    #     # output : line을 그린 후 numpy array 반환 
-    #     '''
-        
-        
-    #     # 1.6cm => 10pixel 
-    #     start_x , start_y = start[0] , start[1]
-    #     if direction =='x':
-    #         end_x , end_y = start_x+num_pixel , start_y
-    #     else:
-    #         end_x , end_y = start_x , start_y+num_pixel
-            
-    #     cv2.line(image , (start_x , start_y) , (end_x , end_y) , (255,255,255) , 2 )
-    #     cv2.putText(image , f"{num_pixel}pixel = {round(self.pixel2cm*num_pixel,3)}cm" , (start_x , start_y-20) , cv2.FONT_ITALIC,0.5,(0,0,0),2 )
-    #     return image
-    # def Drawline_cm(self , image , start:int , cm:float , direction = 'x' ): # 특정 cm 만큼 직선을 그려주는 함수
-    #     '''
-    #     앞에서 구한 pixel2cm에 맞게 직선을 그려주는 함수
-    #     # input : numpy array 배열
-    #     # start : 직선의 시작 위치 
-    #     # direction : 'x' or 'y' 빙향
-    #     # cm: 원하는 cm 
-    #     # output : line을 그린 후 numpy array 반환 
-    #     '''
-        
-    #     pixel = cm*self.cm2pixel
-    #     pixel_round = int(round(pixel,0))
-    #     start_x , start_y = start[0] , start[1]
-    #     if direction =='x':
-    #         end_x , end_y = start_x+pixel_round , start_y
-    #     else:
-    #         end_x , end_y = start_x , start_y+pixel_round
-            
-    #     cv2.line(image , (start_x , start_y) , (end_x , end_y) , (255,255,255) , 2 )
-    #     cv2.putText(image , f"{cm}cm = {pixel_round}pixel ({pixel})" , (start_x , start_y-20) , cv2.FONT_ITALIC,0.5,(0,0,0),2 )
-    #     return image
+            break
+         
     
     def camera_config(self):
         self.pipeline = rs.pipeline()
@@ -190,7 +177,7 @@ class Checkscale():
                     for position in self.mouse_position:
                         # 마우스 좌표 시각화
                         cv2.circle(color_image , (position[0] , position[1]) , 3 , (255,255,255) , -1)
-                        # cv2.putText(color_image , f"[{str(position[0])} , {str(position[1])}]" , (position[0]-50,position[1]+20) ,cv2.FONT_ITALIC,0.4,(255,0,0),2)
+                        cv2.putText(color_image , f"[{str(position[0])} , {str(position[1])}]" , (position[0]-50,position[1]+20) ,cv2.FONT_ITALIC,0.4,(255,0,0),2)
                         
                         # depth_colormap 시각화
                         depth_pixel = self.project_color_pixel_to_depth_pixel(position , depth_frame)
@@ -202,8 +189,8 @@ class Checkscale():
                         
                         depth_point_round = list(map(lambda x: round(x*100,1) ,  depth_point) )
                         
-                        cv2.putText(color_image , f"{str(round(depth_image[depth_pixel_round[1] , depth_pixel_round[0]]*self.depth_scale,3))}" , (position[0]-30,position[1]+10) ,cv2.FONT_ITALIC,0.5,(255,0,0),2)
-                        cv2.putText(color_image , f"{str(depth_point_round)}" , (position[0]-80,position[1]+30) ,cv2.FONT_ITALIC,0.5,(255,0,0),2)
+                        # cv2.putText(color_image , f"{str(round(depth_image[depth_pixel_round[1] , depth_pixel_round[0]]*self.depth_scale,3))}" , (position[0]-30,position[1]+10) ,cv2.FONT_ITALIC,0.5,(255,0,0),2)
+                        # cv2.putText(color_image , f"{str(depth_point_round)}" , (position[0]-80,position[1]+30) ,cv2.FONT_ITALIC,0.5,(255,0,0),2)
                         
                 
                 # if len(self.mouse_position) >= 2:
@@ -297,6 +284,9 @@ class Checkscale():
                         
                 if cv2.waitKey(1) ==ord('q'):
                     break
+                if cv2.waitKey(1) ==ord('a'):
+                    print("aruco_detect!! ")
+                    self.Aruco_detect()
                 # 이미지 저장
                 if cv2.waitKey(1) == ord('s'):
                     dirpath = Path(__file__).resolve().parents[0]
@@ -334,7 +324,6 @@ class Checkscale():
                 
                 self.Drawline_cm(color_image , (int(640/2) , int(480/2)) , 12.0 , 'x')
                 self.Drawline_cm(color_image , (int(640/2) , int(480/2)) , 12.0 , 'y')
-            
                         
                 if cv2.waitKey(1) ==ord('q'):
                     break
@@ -346,7 +335,6 @@ class Checkscale():
                     file_name = str(dirpath / image_name)
                     cv2.imwrite(file_name , color_image)
                     print("image_save")
-                
                 cv2.imshow("color" , color_image)
                 cv2.imshow("depth" , depth_colormap)
                 

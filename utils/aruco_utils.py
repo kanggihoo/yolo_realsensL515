@@ -50,6 +50,10 @@ def aruco_display(corners, ids, rejected, image):
 			cv2.line(image, topRight, bottomRight, (0, 255, 0), 2)
 			cv2.line(image, bottomRight, bottomLeft, (0, 255, 0), 2)
 			cv2.line(image, bottomLeft, topLeft, (0, 255, 0), 2)
+   
+			cv2.circle(image , topLeft , 3 , (0,0,255) , -1)
+			cv2.circle(image , topRight , 3 , (0,0,255) , -1)
+
 			# compute and draw the center (x, y)-coordinates of the ArUco
 			# marker
 			cX = int((topLeft[0] + bottomRight[0]) / 2.0) # 중앙점

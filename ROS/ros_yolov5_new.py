@@ -33,7 +33,7 @@ from yolov5_ros.utils.aruco_utils import ARUCO_DICT , aruco_display
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
-from bboxes_ex_msgs.msg import BoundingBoxes, BoundingBox , FirstPickBox
+from bboxes_ex_msgs.msg import BoundingBoxes, BoundingBox , FirstPickBox # 여기 부분 변경하고 
 
 from std_msgs.msg import Header
 from cv_bridge import CvBridge
@@ -44,7 +44,7 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 
 # 모델 관련해서 이미지 받아오고 , yolov5 모델을 통해 최종 박스 정보 return
 class yolov5_demo():
-    def __init__(self, weights = ROOT / 'config/best_m_5_27_50.pt',
+    def __init__(self, weights = ROOT / 'config/best_m_5_27_50.pt', # 가중치 파일 이름 변경하고
                         data = ROOT / 'data/coco128.yaml',
                         imagez_height = 640,
                         imagez_width = 640,
@@ -165,7 +165,7 @@ class yolov5_demo():
             depth_frame = self.pipeline.wait_for_frames().get_depth_frame()
             depth_pixel = self.project_color_pixel_to_depth_pixel((center_x,center_y) , depth_frame)
             _, depth_point = self.DeProjectDepthPixeltoDepthPoint(depth_pixel[0] , depth_pixel[1] , depth_frame )
-            depth_point[2] += 0.272 
+            depth_point[2] += 0.275
             self.x_ref, self.y_ref , self.z_ref  = round(depth_point[1]*100,1) , round(depth_point[0]*100,1) , round(depth_point[2]*100 , 1)
             print(f"기준좌표 : {self.x_ref,self.y_ref,self.z_ref}")
             
@@ -192,12 +192,11 @@ class yolov5_demo():
             min_distance = df['distance'][min_distance_idx] # 최상단 box와 카메라간의 떨어진 거리(m)
             # print("original df",df)
             min_y = df['center_y'].min() # 가장 작은 y값 
-            max_diff = 70 # 80pixel
+            max_diff = 50 # 80pixel
             df = df.loc[df['distance']-self.hight_compensation_value < min_distance ]
             df['diff'] = df['center_y'].apply(lambda x: x-min_y) # 가장 작은 y값과의 차이 저장 
             df = df.loc[df['diff']<= max_diff] # drop 되고 남은 데이터 중에서 diff가 max_diff보다 작은 것만 필터링
             df = df.sort_values(by = 'center_x') 
-            print("df" , df)
             final_idx = df.iloc[0,0] # 남은 것들 중에서 center_x로 재 정렬 후 가장 맨 위의 데이터로 최종 pick 후보 선정
             # print("final df" , df)
             
@@ -213,7 +212,8 @@ class yolov5_demo():
                 "depth_from_camera" : round(first_pick_depth_point[2]*100,1),
                 'label' : df['label'][final_idx]
             }
-            print(f"frist_pick: {first_pick}")
+            return first_pick
+            # print(f"frist_pick: {first_pick}")
             # depth_rect , result = self.CalculateAngle(first_pick['x1y1x2y2'] , depth_frame , first_pick['depth_from_camera'])
             # print(f"new_move_point_depth : {result['new_depth_point']}")
             # first_pick['angle'] = result['angle']
@@ -232,13 +232,8 @@ class yolov5_demo():
                     "depth_from_camera" : round(first_pick_depth_point[2]*100,1),
                     'label' : results['label'][0]
                 }
-                print(f"frist_pick: {first_pick}")
-                # depth_rect , result = self.CalculateAngle(first_pick['x1y1x2y2'] , depth_frame , first_pick['depth_from_camera'])
-                # print(f"new_move_point_depth : {result['new_depth_point']}")
-                # first_pick['angle'] = result['angle']
-                # return first_pick , depth_rect , result 
                 
-            elif results['label'][0] == 'pallet': # 1개 인식했고, pallet만 남은경우 
+            elif results['label'][0] == 'pallete': # 1개 인식했고, pallet만 남은경우 
                 first_pick = {
                     'x' : 0.0,
                     'y' : 0.0,
@@ -248,7 +243,7 @@ class yolov5_demo():
                     "depth_from_camera" : 0,
                     'label' : 'pallet'
                 }           
-                print(f"frist_pick: {first_pick}")
+            return first_pick
         else: # 아무것도 인식하지 않은경우
             first_pick = {
                     'x' : 0.0,
@@ -259,7 +254,7 @@ class yolov5_demo():
                     "depth_from_camera" : 0,
                     'label' : 'NULL'
                 }
-        return first_pick 
+            return first_pick 
 
     def PlotFirstPick(self , first_pick , color_image):
         if first_pick['label'] =='box':
@@ -268,6 +263,37 @@ class yolov5_demo():
             cv2.putText(color_image ,  "Palletizing End" , (320-230,240) , cv2.FONT_HERSHEY_DUPLEX,2,(0,0,0) , 4 , 3 )
         elif first_pick['label'] == 'NULL':
             cv2.putText(color_image , "No box, pallet" , (320-250,240) , cv2.FONT_HERSHEY_DUPLEX,2,(255,0,0) , 4, 2 )
+    def FindLargeContour_BoxPoint(self , image):
+        '''
+        input : binary_image
+        output : largest_contour , box_point 
+        '''
+        contours, _ = cv2.findContours(image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        largest_contour = max(contours, key=cv2.contourArea)
+        rect = cv2.minAreaRect(largest_contour)
+        box_point = cv2.boxPoints(rect) 
+        return  largest_contour , box_point   
+     # IOU 구하기
+    def FindIOU(self,binary , largest_contour , box_point):
+        intersection = np.zeros_like(binary)
+        cv2.drawContours(intersection, [largest_contour], -1, 255, thickness=cv2.FILLED)
+        largest_contour_area = np.sum(intersection)/255
+
+        intersection[:,:]=0
+        cv2.drawContours(intersection, [box_point], -1, 255, thickness=cv2.FILLED)
+        box_contour_area=np.sum(intersection)/255
+
+        cv2.drawContours(intersection, [largest_contour], -1, 255, thickness=cv2.FILLED)
+        union_area = np.sum(intersection)/255
+        intersection_area = largest_contour_area +box_contour_area - np.sum(intersection)/255
+        IOU = round(intersection_area/union_area , 2)
+        # print("합집합 넓이 : ",union_area)
+        # print("largest_contour 면적: " , largest_contour_area)
+        # print("box contour 면적 : " , box_contour_area)
+        # print("교집합 넓이:", intersection_area )
+        # print("IOU" , IOU)
+        
+        return IOU    
     def project_color_pixel_to_depth_pixel(self , color_point, depth_frame)-> float: 
         depth_pixel = rs.rs2_project_color_pixel_to_depth_pixel(depth_frame.get_data(), self.depth_scale,
                                     self.depth_min, self.depth_max,

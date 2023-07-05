@@ -102,12 +102,23 @@ class BoxDetect():
             color_frame = frames.get_color_frame()
             color_image = np.asanyarray(color_frame.get_data())
             corners, ids, rejected = cv2.aruco.detectMarkers(color_image, arucoDict, parameters=arucoParams)
+            
             if len(corners) ==0:
                 print(f"NO aruco marker!!")
                 continue
             
+            # corners = np.array(corners).reshape((4, 2))
+            # (topLeft, topRight, bottomRight, bottomLeft) = corners 
+            
+            # topRight = (int(topRight[0]), int(topRight[1]))
+            # bottomRight = (int(bottomRight[0]), int(bottomRight[1]))
+            # bottomLeft = (int(bottomLeft[0]), int(bottomLeft[1]))
+            # topLeft = (int(topLeft[0]), int(topLeft[1]))
+            
             x1 , y1 = corners[0].reshape(4,2)[0]
             x2, y2 = corners[0].reshape(4,2)[2]
+            
+            
             
             
             self.center_x , self.center_y = int(round((x2+x1)/2,0)) , int(round((y2+y1)/2,0))
@@ -123,7 +134,7 @@ class BoxDetect():
             # depth = depth_frame.get_distance(int(round(depth_pixel[0],0)), int(round(depth_pixel[1],0))) +  0.29 # 마커와 공압 그리퍼 말단부 길이 고려(29cm)
             # depth_point = rs.rs2_deproject_pixel_to_point(self.depth_intrin, [int(depth_pixel[0]), int(depth_pixel[1])], depth) # depth 카메라의 픽셀과
             
-            depth_point[2] += 0.272 # 마커를 바닥에 붙힐때 지면과 공압 그리퍼 말단부와 떨어진 거리를 빼주어야 말단부의 Z기준점이 생성된다. 
+            depth_point[2] += 0.275 # 마커를 바닥에 붙힐때 지면과 공압 그리퍼 말단부와 떨어진 거리를 빼주어야 말단부의 Z기준점이 생성된다. 
             # 만약 => 그리퍼 길이 고려한 특정한 값을 더했는데 모델이 던져준 Z값에 공압 그리퍼가 가지 못한 경우는 특정한 값을 더 줄이면서 그리퍼 말단부가 상자에 닿을 수 있도록 해야 한다.
             
             # ## depth_point => color point 변화
@@ -187,7 +198,8 @@ class BoxDetect():
         # 1개 인식했는데 pallet인경우 => 디팔레타이징 종료
         # 1개 인식했지만 박스만 인식한 경우 => 없을 것 같지만(계속 동작)
         # 여러개 인식했지만 거기에 팔렛트 , 박스 포함된 경우 => 지금 그대로 
-
+        
+        # 파렛트랑 박스 각각 1개씩 인식한 경우에 대해서? 오류뜨는거 같은데 
         if len(results['idx']) > 1 :
             df = pd.DataFrame(results) # result를 데이터 프레임으로 만듬
             df = df.loc[df['label']=='box'] # 'box'로 인식한것만 저장
@@ -195,7 +207,7 @@ class BoxDetect():
             min_distance = df['distance'][min_distance_idx] # 최상단 box와 카메라간의 떨어진 거리(m)
             # print("original df",df)
             min_y = df['center_y'].min() # 가장 작은 y값 
-            max_diff = 70 # 80pixel
+            max_diff = 50 # 80pixel
             df = df.loc[df['distance']-self.hight_compensation_value < min_distance ]
             df['diff'] = df['center_y'].apply(lambda x: x-min_y) # 가장 작은 y값과의 차이 저장 
             df = df.loc[df['diff']<= max_diff] # drop 되고 남은 데이터 중에서 diff가 max_diff보다 작은 것만 필터링
@@ -215,13 +227,10 @@ class BoxDetect():
                 "depth_from_camera" : round(first_pick_depth_point[2]*100,1),
                 'label' : df['label'][final_idx]
             }
-            print(f"frist_pick: {first_pick}")
-            # depth_rect , result = self.CalculateAngle(first_pick['x1y1x2y2'] , depth_frame , first_pick['depth_from_camera'])
-            # print(f"new_move_point_depth : {result['new_depth_point']}")
-            # first_pick['angle'] = result['angle']
-            # return first_pick , depth_rect , result 
+            return first_pick
             
         elif len(results['idx']) == 1: # 총 1개만 인식한 경우 
+            # first_pick = None
             if results["label"][0] == 'box': # 1개 인식했는데 box인경우 
                 first_pick_depth_pixel = self.project_color_pixel_to_depth_pixel(results['center'][0] , depth_frame )
                 _ , first_pick_depth_point = self.DeProjectDepthPixeltoDepthPoint(first_pick_depth_pixel[0] ,first_pick_depth_pixel[1] , depth_frame )
@@ -234,34 +243,28 @@ class BoxDetect():
                     "depth_from_camera" : round(first_pick_depth_point[2]*100,1),
                     'label' : results['label'][0]
                 }
-                print(f"frist_pick: {first_pick}")
-                # depth_rect , result = self.CalculateAngle(first_pick['x1y1x2y2'] , depth_frame , first_pick['depth_from_camera'])
-                # print(f"new_move_point_depth : {result['new_depth_point']}")
-                # first_pick['angle'] = result['angle']
-                # return first_pick , depth_rect , result 
-                
-            elif results['label'][0] == 'pallet': # 1개 인식했고, pallet만 남은경우 
+            elif results['label'][0] == 'pallete': # 1개 인식했고, pallet만 남은경우 ## 모델에서 이름이 "box" , "pallete로 되어 있어서 수정해야함."
                 first_pick = {
-                    'x' : 0,
-                    'y' : 0,
-                    'z' : 0,
-                    'center' : 0,
+                    'x' : 0.0,
+                    'y' : 0.0,
+                    'z' : 0.0,
+                    'center' : (0,0),
                     'x1y1x2y2' : 0,
                     "depth_from_camera" : 0,
                     'label' : 'pallet'
-                }           
-                print(f"frist_pick: {first_pick}")
-        else: # 아무것도 인식하지 않은경우
+                }   
+            return first_pick        
+        else: # 아무것도 인식하지 않은경우c
             first_pick = {
-                    'x' : 0,
-                    'y' : 0,
-                    'z' : 0,
-                    'center' : 0,
+                   'x' : 0.0,
+                    'y' : 0.0,
+                    'z' : 0.0,
+                    'center' : (0,0),
                     'x1y1x2y2' : 0,
                     "depth_from_camera" : 0,
                     'label' : 'NULL'
                 }
-        return first_pick 
+            return first_pick 
     
     def PlotFirstPick(self , first_pick , color_image):
         if first_pick['label'] =='box':
@@ -677,6 +680,7 @@ class BoxDetect():
             # print(results)
             ## 우선순위 정하기 
             first_pick = self.FirstPick(results , depth_frame)
+            print("first_pick _ self.firstpick return value : ",first_pick)
             if first_pick['label'] == 'box':
                 self.depth_rect , result = self.CalculateAngle(first_pick['x1y1x2y2'] , depth_frame , first_pick['depth_from_camera'])
                 self.depth_rect , depth_colormap = self.PlotCalculateAngle(result, self.depth_rect , depth_colormap)  
