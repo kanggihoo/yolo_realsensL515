@@ -42,7 +42,7 @@ from utils.plots import Annotator, colors, save_one_box
 from utils.torch_utils import select_device, smart_inference_mode
 
 
-class BoxDetect(): # __init__ 부분은 건드리지 말고 
+class yolov5_demo(): # __init__ 부분은 건드리지 말고 
     def __init__(self , save_video = 'False'):
         self.Camera_cofig()
         self.model = self.Model_cofig()
@@ -201,16 +201,24 @@ class BoxDetect(): # __init__ 부분은 건드리지 말고
         
         # 파렛트랑 박스 각각 1개씩 인식한 경우에 대해서? 오류뜨는거 같은데 
         if len(results['idx']) > 1 :
+            
             df = pd.DataFrame(results) # result를 데이터 프레임으로 만듬
             df = df.loc[df['label']=='box'] # 'box'로 인식한것만 저장
+     
             min_distance_idx = df.iloc[np.argmin(df['distance'].values), 0] # 최상단 box의 인덱스 번호 
             min_distance = df['distance'][min_distance_idx] # 최상단 box와 카메라간의 떨어진 거리(m)
             # print("original df",df)
+            
+            ## 높이에 대한 1차 필터링 
+            df = df.loc[df['distance']-self.hight_compensation_value < min_distance ]
+            
+            
             min_y = df['center_y'].min() # 가장 작은 y값 
             max_diff = 50 # 80pixel
-            df = df.loc[df['distance']-self.hight_compensation_value < min_distance ]
             df['diff'] = df['center_y'].apply(lambda x: x-min_y) # 가장 작은 y값과의 차이 저장 
+           
             df = df.loc[df['diff']<= max_diff] # drop 되고 남은 데이터 중에서 diff가 max_diff보다 작은 것만 필터링
+            # print("df_filterling ", df)
             df = df.sort_values(by = 'center_x') 
             final_idx = df.iloc[0,0] # 남은 것들 중에서 center_x로 재 정렬 후 가장 맨 위의 데이터로 최종 pick 후보 선정
             # print("final df" , df)
@@ -574,7 +582,7 @@ class BoxDetect(): # __init__ 부분은 건드리지 말고
     #     return color_point
   
            
-    def Run(self,
+    def Predict(self,
             model,
             augment = False,
             visualize = False,
@@ -605,11 +613,10 @@ class BoxDetect(): # __init__ 부분은 건드리지 말고
             depth_image = np.asanyarray(depth_frame.get_data())
             depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.04), cv2.COLORMAP_HSV)
             # color_image
-            origin_color_image = np.asanyarray(color_frame.get_data())
+            self.origin_color_image = np.asanyarray(color_frame.get_data())
             # origin_color_image = cv2.resize(origin_color_image , (640,480))
-            origin_color_image2 = origin_color_image.copy() # 사진 저장을 위한 이미지
             
-            color_image = np.expand_dims(origin_color_image, axis=0)
+            color_image = np.expand_dims(self.origin_color_image, axis=0)
             im0s = color_image.copy()
             im = torch.from_numpy(color_image).to(model.device)
             im = im.permute(0,3,1,2)
@@ -620,114 +627,76 @@ class BoxDetect(): # __init__ 부분은 건드리지 말고
                 im = im[None]  # expand for batch dim
             pred = model(im, augment=augment, visualize=visualize)
             pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
-
-            centers = []
-            distances = []
-            labels = []
-            x1y1x2y2 = []
-            
-            # Process predictions
-            for i, det in enumerate(pred):  # per image ################### pred에 좌표값(x,y ,w ,h , confidence? , class값이 tensor로 저장되어 있고 for문을 통해 하나씩 불러옴.)
-                seen += 1 # 처음에 seen은 0으로 저장되어 있음.
-                if webcam:  # batch_size >= 1
-                    im0 =  im0s[i].copy()
-                else:
-                    im0 = im0s.copy()
-                annotator = Annotator(im0, line_width=line_thickness, example=str(self.names)) # utils/plot의 Annotator 클래스 
-                if len(det):
-                    
-                    det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], im0.shape).round() # det에 저장된 6개의 값 중에서 4개(x1,y1,x2,y2)만 불러와서 실수값의 좌표값을 반올림 작업
-                    # Write results ################################################################### 결과 이미지 만들기 
-                    for (*xyxy, conf, cls) in det: ## det에 담긴 tensor를 거꾸로 루프 돌리기  xyxy : det의 (x1,y1,x2,y2) , conf :얼마나 확신하는지 ,  cls: 예측한 클래스 번호 
-                        if True or save_crop or view_img:  # Add bbox to image
-                            x1 , y1 , x2,y2 = list(map(int , xyxy ))
-                            
-                            center =  int(round((x1+x2)/2,0)) , int(round((y1+y2)/2,0))
-                            # print(center)
-                            depth_center_pixel =self.project_color_pixel_to_depth_pixel(center , depth_frame)
-                            depth_center_pixel = list(map(lambda x : int(round(x,0)) , depth_center_pixel))
-                            distance = depth_frame.get_distance(depth_center_pixel[0] , depth_center_pixel[1])
-                            
-                            c = int(cls)  # integer 
-                            label = None if hide_labels else (self.names[c] if hide_conf else f'{self.names[c]} {conf:.2f}')
-                            annotator.box_label(xyxy, distance,label, color=colors(c, True) ) 
-                            cv2.circle(im0 , (center) , 3 , (255,255,255) , 3) # 중심좌표 시각화
-                            
-                            
-                            cv2.circle(depth_colormap , depth_center_pixel , 3 , (255,255,255) , 3 ) #  depth 상의 중심좌표 시각화
-
-                            
-                            # if distance < 0.9 and center[0] < 529:
-                            centers.append(center)
-                            distances.append(round(distance,3))
-                            x1y1x2y2.append([x1,y1,x2,y2])
-                            labels.append(self.names[c])
-                            
-                                    
-                # Stream results (webcam 화면 으로 부터받은 결과를 출력)
-                im0 = annotator.result()
-                
-            ## 인식한 결과 dict형태로 저장 
-            results = {
-                "idx" : list(range(len(centers))),
-                "x1y1x2y2" : x1y1x2y2,
-                "center" : centers,
-                "center_x" : [centers[i][0] for i in range(len(centers))],
-                "center_y" : [centers[i][1] for i in range(len(centers))],
-                "distance" : distances,
-                "label" : labels
-            }
-            # print(results)
-            ## 우선순위 정하기 
-            first_pick = self.FirstPick(results , depth_frame)
-            print("first_pick _ self.firstpick return value : ",first_pick)
-            if first_pick['label'] == 'box':
-                self.depth_rect , result = self.CalculateAngle(first_pick['x1y1x2y2'] , depth_frame , first_pick['depth_from_camera'])
-                self.depth_rect , depth_colormap = self.PlotCalculateAngle(result, self.depth_rect , depth_colormap)  
-                first_pick['angle'] = result['angle']
-            else :
-                first_pick['angle'] = 0
-            
-            self.PlotFirstPick(first_pick,origin_color_image)
-            
-
-            
-            try : 
-                while 1:
-                    ## 이미지 저장
-                    if cv2.waitKey(1) == ord('s'):
-                        now = datetime.datetime.now()
-                        suffix = '.jpg'
-                        file_name = f"{now.strftime('%Y_%m_%d_%H_%M_%S_%f')}"+suffix
-                        file_name2 = f"{now.strftime('%Y_%m_%d_%H_%M_%S_%f')}_depth"+suffix
-                        file_path = self.save_img_path / file_name
-                        file_path2 = self.save_img_path / file_name2
-                        image = cv2.resize(origin_color_image2 , (640,640))
-                        # cv2.imwrite(file_path , image)
-                        cv2.imwrite(file_path2 , self.depth_rect)
-                        print(f'save_image : {file_name} , save_path : {file_path}')
-                    if cv2.waitKey(1) == ord('f'):
-                        if first_pick:
-                            print(f"frist_pick : {first_pick}")
-                        else: print("NO first_pick")
-                    
-                    #cv2.circle(im0 , (self.center_x , self.center_py) , 3, (0,0,255) , -1) # aruco marker 중심점 표시
-                    cv2.imshow("original", origin_color_image2)
-                    cv2.imshow("first" , origin_color_image)
-                    cv2.imshow(str("result"), im0)
-                    cv2.imshow("depth" ,depth_colormap)
-                    if first_pick['label'] == 'box':
-                        cv2.imshow("dpeth_crop" , self.depth_rect)
+            return pred , depth_frame , im, im0s , depth_colormap 
+    def GetFirstPick(self , pred , depth_frame , im , im0s , depth_colormap , line_thickness = 1):
+        
+        centers = []
+        distances = []
+        labels = []
+        x1y1x2y2 = []
+        
+        # Process predictions
+        for i, det in enumerate(pred):  # per image ################### pred에 좌표값(x,y ,w ,h , confidence? , class값이 tensor로 저장되어 있고 for문을 통해 하나씩 불러옴.)
+            im0 = im0s[i].copy()
+            annotator = Annotator(im0, line_width=line_thickness, example=str(self.names)) # utils/plot의 Annotator 클래스 
+            if len(det):
+                det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], im0.shape).round() # det에 저장된 6개의 값 중에서 4개(x1,y1,x2,y2)만 불러와서 실수값의 좌표값을 반올림 작업
+                # Write results ################################################################### 결과 이미지 만들기 
+                for (*xyxy, conf, cls) in det: ## det에 담긴 tensor를 거꾸로 루프 돌리기  xyxy : det의 (x1,y1,x2,y2) , conf :얼마나 확신하는지 ,  cls: 예측한 클래스 번호 
+                        x1 , y1 , x2,y2 = list(map(int , xyxy ))
+                        center =  int(round((x1+x2)/2,0)) , int(round((y1+y2)/2,0))
+                        depth_center_pixel =self.project_color_pixel_to_depth_pixel(center , depth_frame)
+                        depth_center_pixel = list(map(lambda x : int(round(x,0)) , depth_center_pixel))
+                        distance = depth_frame.get_distance(depth_center_pixel[0] , depth_center_pixel[1])
+                        
+                        c = int(cls)  # integer 
+                        label =  f'{self.names[c]} {conf:.2f}'
+                        annotator.box_label(xyxy, label, color=colors(c, True) ) 
+                        cv2.circle(im0 , (center) , 3 , (255,255,255) , 3) # 중심좌표 시각화
+                        
+                        
+                        cv2.circle(depth_colormap , depth_center_pixel , 3 , (255,255,255) , 3 ) #  depth 상의 중심좌표 시각화
 
                         
-
-                    if cv2.waitKey(1) == ord('c'):
-                        print("창 닫음")
-                        break 
-            finally :
-                cv2.destroyAllWindows()   
+                        # if distance < 0.9 and center[0] < 529:
+                        centers.append(center)
+                        distances.append(round(distance,3))
+                        x1y1x2y2.append([x1,y1,x2,y2])
+                        labels.append(self.names[c])
+                        
+                                
+            # Stream results (webcam 화면 으로 부터받은 결과를 출력)
+            im0 = annotator.result()
             
-   
+        ## 인식한 결과 dict형태로 저장 
+        results = {
+            "idx" : list(range(len(centers))),
+            "x1y1x2y2" : x1y1x2y2,
+            "center" : centers,
+            "center_x" : [centers[i][0] for i in range(len(centers))],
+            "center_y" : [centers[i][1] for i in range(len(centers))],
+            "distance" : distances,
+            "label" : labels
+        }
+        # print(results)
+        ## 우선순위 정하기 
+        first_pick = self.FirstPick(results , depth_frame)
+        depth_rect_generated = None
+        # print("first_pick _ self.firstpick return value : ",first_pick)
+        if first_pick['label'] == 'box':
+            depth_rect , result = self.CalculateAngle(first_pick['x1y1x2y2'] , depth_frame , first_pick['depth_from_camera'])
+            depth_rect , depth_colormap = self.PlotCalculateAngle(result, depth_rect , depth_colormap)  
+            first_pick['angle'] = result['angle']
+            depth_rect_generated = True
+        else :
+            first_pick['angle'] = 0.0
+            depth_rect_generated = False
+            depth_rect = None
+        self.PlotFirstPick(first_pick,im0)
+        return first_pick , im0 , depth_colormap , depth_rect , depth_rect_generated # depth_rect : 각도 계산하면서 나온 이진화 이미지, 하지만 3차원 채널 이미지(시각화)
+            
+
+            
 
 parser = argparse.ArgumentParser()   
 parser.add_argument('--save_video' , action='store_true' , help='save_video')
@@ -736,11 +705,41 @@ opt = vars(opt)
 
 if __name__ == "__main__":
 #    check_requirements(exclude=('tensorboard', 'thop'))
-   model = BoxDetect(**opt)
+   model = yolov5_demo(**opt)
    while 1:
         key = keyboard.read_key()
         if key == 'p':
-            model.Run(model=model.model)
+            pred , depth_frame , im,im0s , depth_colormap =model.Predict(model=model.model)
+            first_pick , im0 , depth_colormap , depth_rect , depth_rect_generated = model.GetFirstPick(pred, depth_frame,im,im0s,depth_colormap)
+            image = np.hstack((im0,depth_colormap)) # im0 : yolo bounding box 시각화 및 first 시각화 이미지
+            try : 
+                while 1:
+                    ## 이미지 저장
+                    if cv2.waitKey(1) == ord('s'):
+                        now = datetime.datetime.now()
+                        suffix = '.jpg'
+                        file_name = f"{now.strftime('%Y_%m_%d_%H_%M_%S_%f')}"+suffix
+                        file_name2 = f"{now.strftime('%Y_%m_%d_%H_%M_%S_%f')}_depth"+suffix
+                        file_path = model.save_img_path / file_name
+                        file_path2 = model.save_img_path / file_name2
+                        save_image = cv2.resize(model.origin_color_image , (640,640))
+                        cv2.imwrite(file_path , save_image) # 추후 학습을 위한 origin image 저장
+                        cv2.imwrite(file_path2 , depth_rect) 
+                        print(f'save_image : {file_name} , save_path : {file_path}')
+                    if cv2.waitKey(1) == ord('f'):
+                        if first_pick:
+                            print(f"frist_pick : {first_pick}")
+                        else: print("NO first_pick")
+                    
+                    cv2.imshow(str("result"), image)
+                    cv2.imshow("depth" ,depth_colormap)
+                    if depth_rect_generated is True:
+                        cv2.imshow("dpeth_crop" , depth_rect)
+                    if cv2.waitKey(1) == ord('c'):
+                        print("창 닫음")
+                        break 
+            finally :
+                cv2.destroyAllWindows()   
         if key =='q':
             break
         if key == 'r':

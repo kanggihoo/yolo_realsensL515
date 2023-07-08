@@ -152,9 +152,11 @@ class yolov5_demo():
             min_distance_idx = df.iloc[np.argmin(df['distance'].values), 0] # 최상단 box의 인덱스 번호 
             min_distance = df['distance'][min_distance_idx] # 최상단 box와 카메라간의 떨어진 거리(m)
             # print("original df",df)
+            df = df.loc[df['distance']-self.hight_compensation_value < min_distance ]
+            
             min_y = df['center_y'].min() # 가장 작은 y값 
             max_diff = 50 # 80pixel
-            df = df.loc[df['distance']-self.hight_compensation_value < min_distance ]
+           
             df['diff'] = df['center_y'].apply(lambda x: x-min_y) # 가장 작은 y값과의 차이 저장 
             df = df.loc[df['diff']<= max_diff] # drop 되고 남은 데이터 중에서 diff가 max_diff보다 작은 것만 필터링
             df = df.sort_values(by = 'center_x') 
