@@ -355,7 +355,7 @@ class yolov5_demo(): # __init__ 부분은 건드리지 말고
         depth_pixel2 = list(map(lambda x : int(round(x,0)) , depth_pixel2))
         
         # 관찰할 depth 영역 확인 
-        spare_roi = 3 # 10pixel
+        spare_roi = 3 # 10pixel # 3보다는 더 줘야 할 거 같은데 
         depth_rect = depth_image[depth_pixel1[1]-spare_roi : depth_pixel2[1]+spare_roi , depth_pixel1[0]-spare_roi : depth_pixel2[0]+spare_roi]
         depth_rect = np.where((depth_rect >= center_distance-1) & (depth_rect <= center_distance+1) ,255, 0) # 이진화 작업 depth 값이 중심-2 ~ 중심+2 사이면 255(흰) 아니면 0(검)
         depth_rect_one_channel = depth_rect.astype(np.uint8)  # float => uint8로변경
@@ -387,16 +387,21 @@ class yolov5_demo(): # __init__ 부분은 건드리지 말고
             box_int2= np.intp(box_point2)
             ## 각도 구하기 (만약 IOU가 0.8 미만인데 각도가 0도가 아닌경우 는 첫번째 , 두번째 각도의 평균으로 계산)
             angle2 , add_90angle2 = self.FindAngle(box_int2)
-            print("angle_flag2 : " , add_90angle2)
-            cv2.drawContours(depth_rect_3channel , [box_int2] , -1 , (0,0,255) , 2  )
-            if angle < 5:
-                final_angle = angle2
-                print(f"angle : {angle} , angle2 : {angle2}")
-                print("final_angel = angle2" , final_angle)
-            else:
-                final_angle = (angle+angle2)/2 
-                print(f"angle : {angle} , angle2 : {angle2}")
-                print("final_angel = angle+angle2" , final_angle)
+            # print("angle_flag2 : " , add_90angle2)
+            # cv2.drawContours(depth_rect_3channel , [box_int2] , -1 , (0,0,255) , 2  )
+            # if angle < 5:
+            #     final_angle = angle2
+            #     print(f"angle : {angle} , angle2 : {angle2}")
+            #     print("final_angel = angle2" , final_angle)
+            # else:
+            #     final_angle = (angle+angle2)/2 
+            #     print(f"angle : {angle} , angle2 : {angle2}")
+            #     print("final_angel = angle+angle2" , final_angle)
+            
+            
+            ### 코너점을 이용하여 각도 찾기
+            
+            
                     
         else :
             final_angle = angle

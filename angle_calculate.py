@@ -222,7 +222,7 @@ def FindAngle(box_point):
             angle = 0
     return round(angle,1) , add_90angle
 
-img_origin = cv2.imread('img/tmp16.jpg',0)
+img_origin = cv2.imread('img/tmp20.jpg',0)
 image = cv2.GaussianBlur(img_origin, (3, 3),sigmaX=0,sigmaY=0) # 그림 그리기 용 iamge)3채널? 아마도?
 _, binary = cv2.threshold(image, 128, 255, cv2.THRESH_BINARY)
 largest_contour , box_point = FindLargeContour_BoxPoint(binary)
