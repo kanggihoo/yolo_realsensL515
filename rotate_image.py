@@ -2,27 +2,28 @@ import cv2
 import numpy as np
 import math
 
-image = cv2.imread("./img/tmp9.jpg")
+image = cv2.imread("./img/tmp22.jpg")
 print(f"image.shape : {image.shape}" )
 gray = cv2.cvtColor(image , cv2.COLOR_BGR2GRAY)
 
-# kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5,5))
-# coner_image = cv2.morphologyEx(gray , cv2.MORPH_CLOSE , kernel=kernel , iterations=10)
-## 검출할 코너의 영역 설정(영역에 따라 코너 점이 달라질 수도 있어서 이부분에 대한 조치필요)
-HEIGHT , WIDTH =  list(map(lambda x : int(x/2) , (image.shape[0] , image.shape[1])))
+kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5,5))
+coner_image = cv2.morphologyEx(gray , cv2.MORPH_CLOSE , kernel=kernel , iterations=10)
+# 검출할 코너의 영역 설정(영역에 따라 코너 점이 달라질 수도 있어서 이부분에 대한 조치필요)
+HEIGHT , WIDTH =  list(map(lambda x : int(x) , (image.shape[0]*0.2 , image.shape[1]*0.5)))
 coner_image = gray[:HEIGHT , :WIDTH] 
 
 # coner_image processing 
-kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))
-coner_image = cv2.morphologyEx(coner_image , cv2.MORPH_CLOSE , kernel=kernel , iterations=3)
+# kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))
+# coner_image = cv2.morphologyEx(coner_image , cv2.MORPH_CLOSE , kernel=kernel , iterations=3)
 
 
 ## 여러개 코너 검출
-# corners = cv2.goodFeaturesToTrack(coner_image, 1, 0.01, 10) # numpy type 반환
+# corners = cv2.goodFeaturesToTrack(coner_image, 10, 0.01, 5) # numpy type 반환
 # corners = np.int32(corners)
 # for i in corners:
 #     corner = i.squeeze()
 #     cv2.circle(image , corner , 3 , (0,0,255) ,-1)
+#     print(corner)
 
 # ## 1개의 코너 검출(FristPoint)
 corners = cv2.goodFeaturesToTrack(coner_image, 1, qualityLevel=0.5 , minDistance=1) # numpy type 반환
@@ -80,7 +81,7 @@ if angle < 0 : # 코너점이 최상단점 (y값이 가장 작을때 )
     
     
     ## 시각화
-    cv2.circle(image , (WIDTH-1 , RightY) , 3 , (255,0,0) , -1)
+    # cv2.circle(image , (WIDTH-1 , RightY) , 3 , (255,0,0) , -1)
     cv2.circle(image , (WIDTH,HEIGHT) , 1 , (0,0,255) , -1)
     cv2.circle(image , TopPoint , 1 , (0,0,255) , -1)
     cv2.circle(image , RightSidePoint , 1 , (255,0,0) , -1)
@@ -115,7 +116,9 @@ else : # 코너점이 가장 좌측에 존재함. (x값이 가장 작을 때)
     ## 끝점 구하기 
     
     RightSidePoint =  (LeftPoint[1])/math.sin(math.radians(angle)) , 0
+    RightSidePoint2 =  (LeftPoint[1])/math.tan(math.radians(angle))+LeftPoint[0] , 0
     print(f"RightSidePoint : " , RightSidePoint)
+    print(f"RightSidePoint2 : " , RightSidePoint2)
     print(math.atan2(-(RightSidePoint[1]-LeftPoint[1]  ) , RightSidePoint[0] - LeftPoint[0])*180/math.pi)
     RightSidePoint = np.int16(RightSidePoint)
     

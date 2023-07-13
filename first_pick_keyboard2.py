@@ -355,7 +355,7 @@ class yolov5_demo(): # __init__ 부분은 건드리지 말고
         depth_pixel2 = list(map(lambda x : int(round(x,0)) , depth_pixel2))
         
         # 관찰할 depth 영역 확인 
-        spare_roi = 3 # 10pixel # 3보다는 더 줘야 할 거 같은데 
+        spare_roi =3 # 10pixel # 
         depth_rect = depth_image[depth_pixel1[1]-spare_roi : depth_pixel2[1]+spare_roi , depth_pixel1[0]-spare_roi : depth_pixel2[0]+spare_roi]
         depth_rect = np.where((depth_rect >= center_distance-1) & (depth_rect <= center_distance+1) ,255, 0) # 이진화 작업 depth 값이 중심-2 ~ 중심+2 사이면 255(흰) 아니면 0(검)
         depth_rect_one_channel = depth_rect.astype(np.uint8)  # float => uint8로변경
@@ -380,13 +380,16 @@ class yolov5_demo(): # __init__ 부분은 건드리지 말고
         depth_rect_3channel = cv2.cvtColor(depth_rect_one_channel , cv2.COLOR_GRAY2RGB) # 1채널 => 3채널 변경(시각화 이미지)
         
         angle , add_90angle = self.FindAngle(box_int)
-        if IOU < 0.8: 
-            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE , (5,5))
-            binary2 = cv2.erode(depth_rect_one_channel , kernel , iterations=10)
-            _ , box_point2 = self.FindLargeContour_BoxPoint(binary2)
-            box_int2= np.intp(box_point2)
-            ## 각도 구하기 (만약 IOU가 0.8 미만인데 각도가 0도가 아닌경우 는 첫번째 , 두번째 각도의 평균으로 계산)
-            angle2 , add_90angle2 = self.FindAngle(box_int2)
+        
+        p1,p2,p3 = (0,0,0)
+        color_CornerPixel = None
+        if IOU < 0.99: 
+            # kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE , (5,5))
+            # binary2 = cv2.erode(depth_rect_one_channel , kernel , iterations=10)
+            # _ , box_point2 = self.FindLargeContour_BoxPoint(binary2)
+            # box_int2= np.intp(box_point2)
+            # ## 각도 구하기 (만약 IOU가 0.8 미만인데 각도가 0도가 아닌경우 는 첫번째 , 두번째 각도의 평균으로 계산)
+            # angle2 , add_90angle2 = self.FindAngle(box_int2)
             # print("angle_flag2 : " , add_90angle2)
             # cv2.drawContours(depth_rect_3channel , [box_int2] , -1 , (0,0,255) , 2  )
             # if angle < 5:
@@ -399,9 +402,27 @@ class yolov5_demo(): # __init__ 부분은 건드리지 말고
             #     print("final_angel = angle+angle2" , final_angle)
             
             
-            ### 코너점을 이용하여 각도 찾기
+            # 검출할 코너의 영역 설정(영역에 따라 코너 점이 달라질 수도 있어서 이부분에 대한 조치필요)
+            HEIGHT , WIDTH =  list(map(lambda x : int(x) , (depth_rect_one_channel.shape[0]*0.5 , image.shape[1]*0.5)))
+            corner_image = depth_rect_one_channel[:HEIGHT , :WIDTH] 
+            p1, p2 ,p3,p4 = self.FindFourPoint(corner_image , HEIGHT , WIDTH)
             
             
+            # depth_CornerPixel , depth_frame_angle , corner_image = self.FindFourPoint(depth_rect_one_channel , depth_rect_3channel)
+            # depth_CornerPixel = (depth_CornerPixel[0] + depth_pixel1[0] -spare_roi  , depth_CornerPixel[1] + depth_pixel1[1] -spare_roi ) # 실제 depth frame기준 corner 좌표로 변환 
+            # color_CornerPixel = self.TransformDepthPixelToColorPixel(depth_CornerPixel , depth_frame , center_distance) # detph pixel에 대응하는 color pixel 좌표로 변환 
+            
+            # print(f"depth_CornerPixel : { depth_CornerPixel}")
+            # print(f"depth_Pixel : { depth_pixel1}")
+            
+            # ### color bounding box로 부터 앞에서 얻은 각도와 CornerPoint 값을 이용하여 나머지 정보 구하기
+            # print(f"bounding box 좌상단 {x1},{y1} , 우하단 : {x2} , {y2}" )
+            # print(f"color frame에서의 corner 좌표 : {color_CornerPixel}")
+            
+            
+            ### 
+            # p1 , p2 ,p3 = self.FindAngleFromColorFrame(xyxy , color_CornerPixel , depth_frame_angle)
+            final_angle = depth_frame_angle
                     
         else :
             final_angle = angle
@@ -463,20 +484,29 @@ class yolov5_demo(): # __init__ 부분은 건드리지 말고
             'pixel' : np.array([first_pixel , second_pixel , third_pixel , last_pixel]),
             # 'Points' : (first_Point, second_Point , third_Point, last_Point),
             'angle' : final_angle,
+            # 'p1p2p3' : np.array([p1,p2,p3]),
+            "color_corner" : color_CornerPixel
         }
         
-        return depth_rect_3channel , result
-    def PlotCalculateAngle(self , result , depth_rect , depth_colormap):
+        return depth_rect_3channel , result 
+    def PlotCalculateAngle(self , result , depth_rect , depth_colormap , im0):
         depth_pixel1  , depth_pixel2 = result['depth_pixel']
         first_pixel , second_pixel , third_pixel , last_pixel = result['pixel']
+        # p1,p2,p3 = result['p1p2p3']
+        color_corner = list(map(lambda x : int(round(x,0))   ,result['color_corner']))
+        
         # new_center = result['new_center']
         
-        cv2.drawContours(depth_rect , [result['pixel']] , -1 , (0,255,0) , 3)
+        # cv2.drawContours(depth_rect , [result['pixel']] , -1 , (0,255,0) , 3)
         # cv2.line(depth_rect, first_pixel , second_pixel , (255,0,0) , 1) 
         # cv2.line(depth_rect, second_pixel , third_pixel , (255,0,0) , 1) 
         
         cv2.rectangle(depth_colormap , (depth_pixel1[0] , depth_pixel1[1]) , (depth_pixel2[0] , depth_pixel2[1]) ,(0,0,255) , 1 ) # detph color 맵에 yolo모델의 bouding box시각화(red)
         # cv2.circle(depth_colormap , new_center , 1 , (0,0,255) , -1)
+        cv2.circle(im0 ,color_corner , 1 , (255,0,0) , -1)
+        # p1,p2,p3 = np.int16(np.array([p1,p2,p3]))
+        # cv2.line(im0 , p1 , p2 , (0,255,0) , 1)
+        # cv2.line(im0 , p2 , p3 , (0,255,0) , 1)
         
         return depth_rect , depth_colormap
 
@@ -512,7 +542,325 @@ class yolov5_demo(): # __init__ 부분은 건드리지 말고
             depth = depth_frame.get_distance(int(round(x_depth_pixel,0)), int(round(y_depth_pixel,0))) # depth 카메라 상의 픽셀 정보를 바탕으로 depth 갚 구함
         depth_point = rs.rs2_deproject_pixel_to_point(self.depth_intrin, [int(round(x_depth_pixel,0)), int(round(y_depth_pixel,0))], depth) # depth 카메라의 픽셀과 depth 값을 통해 3D 좌표계 구함. 
         return depth, depth_point
+    def FindFourPoint(self,corner_image , HEIGHT , WIDTH):
+        
+    # corner_image processing 
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))
+        corner_image = cv2.morphologyEx(corner_image , cv2.MORPH_CLOSE , kernel=kernel , iterations=3)
+        y, x = np.where(corner_image ==255)
+
+        ### 최상단 점 찾기 (p1)
+        min_y  = min(y)
+        min_y_index = np.where(y == min_y)
+        min_x = min(x[min_y_index])
+        cv2.circle(image , (min_x , min_y) ,2 , (255,0,0) , -1 )
+        TopX , TopY = min_x , min_y
+        p1 = (TopX , TopY)
+        print("p1 최상단점 : ", p1 )
+
+        ### x값이 가장 작은 경우(p2) y가 가장 작은 경우
+        min_x  = min(x)
+        min_x_index = np.where(x == min_x)
+        min_y = min(y[min_x_index])
+        cv2.circle(image , (min_x , min_y) ,2 , (255,0,0) , -1 )
+        p2 = (min_x , min_y)
+        print("p2 가장 좌측 점 : ", p2)
+
+
+        ### 경계의 하단 부이면서 x가 가장 작은 경우 (p3)
+        BotomY_index = np.where(y == HEIGHT-1)
+        BotomX = min(x[BotomY_index])
+        p3 = (BotomX , HEIGHT-1)
+        cv2.circle(image , p3 ,2 , (255,0,0) , -1 )
+        print("p3 경계 하단 점 : ", p3 )
+
+        ### 경계의 우측 부이면서 y가 가장 작은 경우 (p4)
+        RightX_index = np.where(x == WIDTH-1)
+        RightY = min(y[RightX_index])
+        p4 = (WIDTH-1 , RightY)
+        cv2.circle(image , p4 ,2 , (255,0,0) , -1 )
+        print("p4 경계 우측 점 : ", p4 )
+        return p1,p2,p3,p4
+    
+    def FindAngleAndLength(self,iamge, reference_point , HEIGHT , WIDTH):
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))
+        corner_image = cv2.morphologyEx(iamge , cv2.MORPH_CLOSE , kernel=kernel , iterations=3)
+        y,x = np.where(corner_image ==255) 
+        candidate = range(reference_point[0]+10 , WIDTH+20 ,2)   
+        final_angle = 0 
+        for i in candidate:
+            RightX_index = np.where(x == i)
+            RightY = min(y[RightX_index])
+            RightPoint = (i , RightY)
+            angle = math.atan2(-(RightPoint[1] - reference_point[1]) , RightPoint[0] - reference_point[0])*180/math.pi
+            cv2.circle(image , RightPoint , 1 , (255,0,0) , -1)
+            # print("angle : " , angle)
+            final_angle += angle
+        final_angle /= len(candidate)
+        print("mean angle : " , final_angle)
+        
+        if final_angle <0:
+            spare = reference_point[1]
+            new_slice = image[spare:image.shape[0]-spare , spare: image.shape[1]-spare]
+            reference_point = (lambda x : x-reference_point[1])(reference_point)
             
+            RightSidePoint = new_slice.shape[1]-1 , ((new_slice.shape[1]-1) - reference_point[0])*math.tan(math.radians(-final_angle)) 
+            RightSidePoint = np.int16(RightSidePoint)
+            LeftSidePoint = 0 , (reference_point[0])*math.tan(math.radians(90-abs(final_angle))) 
+            LeftSidePoint = np.int16(LeftSidePoint)
+            LastPoint = math.sqrt( ((RightSidePoint[0])-reference_point[0])**2 + (RightSidePoint[1] - reference_point[1])**2)*math.cos(math.radians(-final_angle)) , new_slice.shape[0]-1
+            LastPoint = np.int16(LastPoint)
+            WidthLength =  math.sqrt( ((RightSidePoint[0])-reference_point[0])**2 + (RightSidePoint[1] - reference_point[1])**2)
+            HeightLenght = math.sqrt((LeftSidePoint[0]-reference_point[0])**2 + (LeftSidePoint[1]- reference_point[1])**2)
+            print("RightSide와 reference_point 길이 : " , WidthLength)
+            print("LeftSide와 reference_point  길이 : " , HeightLenght)
+        
+            if WidthLength > HeightLenght:
+                final_angle  = round(abs(final_angle)+90,1)
+            else : 
+                final_angle  = round(abs(final_angle),1)
+                
+                
+            cv2.line(new_slice , reference_point , RightSidePoint , (0,255,0) ,2)
+            cv2.line(new_slice, reference_point , LeftSidePoint , (0,255,0) , 2)
+            cv2.line(new_slice, LeftSidePoint , LastPoint , (0,255,0) , 2)
+        else :
+            spare = reference_point[0]
+            new_slice = image[spare:image.shape[0]-spare , spare: image.shape[1]-spare]
+            reference_point = (lambda x : x-reference_point[0])(reference_point)
+            
+            
+            RightSidePoint = (reference_point[1])/math.tan(math.radians(angle)) , 0
+            RightSidePoint = np.int16(RightSidePoint)
+            
+            BotomPoint = (new_slice.shape[0]-1-reference_point[1])*math.tan(math.radians(final_angle)),  new_slice.shape[0] -1
+            print(f"BotomPoint : " , BotomPoint)
+            BotomPoint = np.int16(BotomPoint)
+            
+            
+            LastPoint = math.sqrt( ((RightSidePoint[0])-reference_point[0])**2 + (RightSidePoint[1] - reference_point[1])**2)*math.cos(math.radians(angle))+BotomPoint[0] , (new_slice.shape[0]-1)-math.sqrt( ((RightSidePoint[0])-reference_point[0])**2 + (RightSidePoint[1] - reference_point[1])**2)*math.sin(math.radians(angle))
+            LastPoint = np.int16(LastPoint)
+            
+            WidthLength =   math.sqrt( ((RightSidePoint[0])-reference_point[0])**2 + (RightSidePoint[1] - reference_point[1])**2)
+            HeightLenght = math.sqrt((BotomPoint[0]-reference_point[0])**2 + (BotomPoint[1]- reference_point[1])**2)
+            print("RightSide와 reference_point 길이 : " , WidthLength)
+            print("LeftSide와 reference_point  길이 : " , HeightLenght)
+            
+            if WidthLength > HeightLenght:
+                final_angle  = round(final_angle+90,1)
+            else :
+                final_angle  = round(final_angle,1)
+            cv2.line(new_slice , reference_point , RightSidePoint , (0,255,0) ,2)
+            cv2.line(new_slice, reference_point , BotomPoint , (0,255,0) , 2)
+            cv2.line(new_slice, BotomPoint , LastPoint , (0,255,0) , 2)
+
+        return final_angle , new_slice 
+    
+    
+    # def FindCorner(self , depth_rect_one_channel , depth_rect3channel):
+        
+    #     '''
+    #     depth_rect_one_channel : depth영역으로 부터 이진화된 이미지
+    #     depth_rect_one_channel : depth영역으로 부터 이진화된 이미지를 시각화를 위해 3채널로 변경한 이미지
+        
+    #     <return>
+    #     CornerPoint : 이진화된 이미지로 부터 얻은 코너점
+    #     angle : 이진화된 이미지로 부터 얻은 회전된 각도
+    #     coner_image : 이진화된 이미지의 slicing 한 이미지 
+    #     '''
+        
+    #         # 검출할 코너의 영역 설정(영역에 따라 코너 점이 달라질 수도 있어서 이부분에 대한 조치필요)
+    #     HEIGHT , WIDTH =  list(map(lambda x : int(x) , (depth_rect_one_channel.shape[0]*0.5 , depth_rect_one_channel.shape[1]*0.5)))
+    #     corner_image = depth_rect_one_channel[:HEIGHT , :WIDTH] 
+
+    #     # corner_image processing 
+    #     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))
+    #     corner_image = cv2.morphologyEx(corner_image , cv2.MORPH_CLOSE , kernel=kernel , iterations=3)
+        
+    #     y, x = np.where(corner_image ==255)
+        
+    #     ### 최상단 점 찾기 (p1)
+    #     min_y  = min(y)
+    #     min_y_index = np.where(y == min_y)
+    #     min_x = min(x[min_y_index])
+    #     cv2.circle(depth_rect3channel , (min_x , min_y) ,2 , (255,0,0) , -1 )
+    #     TopX , TopY = min_x , min_y
+    #     p1 = (TopX , TopY)
+    #     print("p1 최상단점 : ", p1 )
+        
+    #     ### x값이 가장 작은 경우(p2) y가 가장 작은 경우
+    #     min_x  = min(x)
+    #     min_x_index = np.where(x == min_x)
+    #     min_y = min(y[min_x_index])
+    #     cv2.circle(depth_rect3channel , (min_x , min_y) ,2 , (255,0,0) , -1 )
+    #     p2 = (min_x , min_y)
+    #     print("p2 가장 좌측 점 : ", p2)
+        
+    #     ### 경계의 하단 부이면서 x가 가장 작은 경우 (p3)
+    #     BotomY_index = np.where(y == HEIGHT-1)
+    #     BotomX = min(x[BotomY_index])
+    #     p3 = (BotomX , HEIGHT-1)
+    #     cv2.circle(depth_rect3channel , p3 ,2 , (255,0,0) , -1 )
+    #     print("p3 경계 하단 점 : ", p3 )
+
+    #     ### 경계의 우측 부이면서 y가 가장 작은 경우 (p4)
+    #     RightX_index = np.where(x == WIDTH-1)
+    #     RightY = min(y[RightX_index])
+    #     p4 = (WIDTH-1 , RightY)
+    #     cv2.circle(depth_rect3channel , p4 ,2 , (255,0,0) , -1 )
+    #     print("p4 경계 우측 점 : ", p4 )
+        
+    #     if p1[0] < p4[0] and p2[0] == p3[0]: # 좌측 상단에 최고점 존재(p1) => 구하고자 하는 각도 음수
+    #         print("좌측 상단이 최고점")
+    #         ## p1을 기준으로 다시 영역을 설정한 뒤 각도 계산
+    #         corner_image = depth_rect_one_channel[:, :] 
+    #         corner_image = cv2.morphologyEx(corner_image , cv2.MORPH_CLOSE , kernel=kernel , iterations=3)
+    #         y,x = np.where(corner_image ==255)
+    #         # candidate = [p1[0]+10 ,p1[0]+20 , p1[0]+30 , p1[0]+40 , p1[0]+50]
+    #         candidate = range(p1[0]+20 , p1[0]+50 , 2)
+    #         final_angle = 0 
+    #         for i in candidate:
+    #             RightX_index = np.where(x == i)
+    #             RightY = min(y[RightX_index])
+    #             p4 = (i , RightY)
+    #             angle = math.atan2(-(p4[1] - p1[1]) , p4[0] - p1[0])*180/math.pi
+    #             cv2.circle(depth_rect3channel , p4 , 1 , (255,0,0) , -1)
+    #             final_angle += angle
+    #         final_angle /= len(candidate)
+    #         print("mean angle : " , final_angle)
+            
+    #         RightSidePoint = depth_rect3channel.shape[1]-1 , ((depth_rect3channel.shape[1]-1) - p1[0])*math.tan(math.radians(-final_angle)) + (p1[1])
+    #         print(f"RightSidePoint : " , RightSidePoint)
+    #         print(math.atan2(-(RightSidePoint[1]-p1[1]  ) , RightSidePoint[0] - p1[0])*180/math.pi)
+    #         RightSidePoint = np.int16(RightSidePoint)
+    #         print(90-abs(final_angle))
+    #         LeftSidePoint = 0 , (p1[0])*math.tan(math.radians(90-abs(final_angle))) + p1[1]
+    #         print(f"LeftSidePoint : " , LeftSidePoint)
+    #         LeftSidePoint = np.int16(LeftSidePoint)
+            
+    #         print("RightSide와 p1 길이 : " , math.sqrt( ((RightSidePoint[0])-p1[0])**2 + (RightSidePoint[1] - p1[1])**2))
+    #         print("LeftSide와 p1  길이 : " , math.sqrt((LeftSidePoint[0]-p1[0])**2 + (LeftSidePoint[1]- p1[1])**2))
+    #         cv2.line(depth_rect3channel , p1 , RightSidePoint , (0,255,0) , 1)
+    #         cv2.line(depth_rect3channel, p1 , LeftSidePoint , (0,255,0) , 1)
+            
+    #         return p1 , angle ,corner_image 
+            
+
+    #     elif p1[1] == p4[1] and p2[0] < p3[0]: # 좌측 상단에 x값이 가장 작은 점이 있음(p2) => 구하고자 하는 각도 양수
+    #         print("좌측 상단의 x가 가장 작음")
+    #         ## p2를 기준으로 다시 영역을 설정한 뒤 각도 계산
+    #         corner_image = depth_rect_one_channel[:, :] 
+    #         corner_image = cv2.morphologyEx(corner_image , cv2.MORPH_CLOSE , kernel=kernel , iterations=3)
+    #         y,x = np.where(corner_image ==255)
+            
+    #         candidate = range(p2[0]+20 , p2[0]+50 , 2)
+    #         final_angle = 0 
+    #         for i in candidate:
+    #             RightX_index = np.where(x == i)
+    #             RightY = min(y[RightX_index])
+    #             p4 = (i , RightY)
+    #             angle = math.atan2(-(p4[1] - p2[1]) , p4[0] - p2[0])*180/math.pi
+    #             cv2.circle(depth_rect3channel , p2 , 1 , (255,0,0) , -1)
+    #             final_angle += angle
+    #         final_angle /= len(candidate)
+    #         print("mean angle : " , final_angle)
+    #         RightSidePoint =  (p2[1])/math.tan(math.radians(angle))+p2[0] , 0
+    #         print(f"RightSidePoint : " , RightSidePoint)
+    #         print(math.atan2(-(RightSidePoint[1]-p2[1]  ) , RightSidePoint[0] - p2[0])*180/math.pi)
+    #         RightSidePoint = np.int16(RightSidePoint)
+            
+    #         BotomPoint = (depth_rect3channel.shape[0]-1-p2[1])*math.tan(math.radians(final_angle)) + p2[0],  depth_rect3channel.shape[0] -1
+    #         print(f"BotomPoint : " , BotomPoint)
+    #         BotomPoint = np.int16(BotomPoint)
+            
+    #         ## 길이 확인
+    #         print("RightSide와 p2 길이 : " , math.sqrt( ((RightSidePoint[0])-p2[0])**2 + (RightSidePoint[1] - p2[1])**2))
+    #         print("LeftSide와 p2  길이 : " , math.sqrt((BotomPoint[0]-p2[0])**2 + (BotomPoint[1]- p2[1])**2))
+    #         cv2.line(depth_rect3channel , p2 , RightSidePoint , (0,255,0) , 1)
+    #         cv2.line(depth_rect3channel, p2 , BotomPoint , (0,255,0) , 1)
+            
+    #         return p2 , angle ,corner_image 
+            
+    #     else :
+    #         print("예외입니다. ")
+            
+    #         assert False , "예외발생!! "
+        
+        
+    
+    # def FindAngleFromColorFrame(self , boundingbox_roi, color_CornerPixel , angle):
+        
+    #     '''
+    #     boundingbox_roi : 최우선 Pick box로 선정된 boundingbox의 좌상단,우하단 좌표 
+    #     color_CornerPixel : depth영역에서 구한 corner pixel에 대응하는 color 영역에서의 pixel 좌표
+    #     angle : depth영역에서 구한 angle 정보
+    #     '''
+    #     x1 ,y1 , x2,y2 = boundingbox_roi
+
+    #     if angle < 0 : # 코너점이 최상단점 (y값이 가장 작을때 )
+            
+    #         ## 끝점 구하기
+    #         RightSidePoint = x2 , (x2 - color_CornerPixel[0])*math.tan(math.radians(-angle)) + (color_CornerPixel[1])+y1
+    #         print(f"RightSidePoint : " , RightSidePoint)
+    #         print(math.atan2(-(RightSidePoint[1]-color_CornerPixel[1]  ) , RightSidePoint[0] - color_CornerPixel[0])*180/math.pi)
+    #         RightSidePoint = np.int16(RightSidePoint)
+    #         LeftSidePoint = x1 , (color_CornerPixel[0])*math.tan(math.radians(90-abs(angle))) + color_CornerPixel[1]+y1
+    #         print(f"LeftSidePoint : " , LeftSidePoint)
+    #         LeftSidePoint = np.int16(LeftSidePoint)
+            
+    #         ## 길이 확인
+    #         print("RightSide와 color_CornerPixel 길이 : " , math.sqrt( ((RightSidePoint[0])-color_CornerPixel[0])**2 + (RightSidePoint[1] - color_CornerPixel[1])**2))
+    #         print("LeftSide와 color_CornerPixel  길이 : " , math.sqrt((LeftSidePoint[0]-color_CornerPixel[0])**2 + (LeftSidePoint[1]- color_CornerPixel[1])**2))
+            
+    #         ## 시각화
+    #         # cv2.circle(image , color_CornerPixel , 1 , (0,0,255) , -1)
+    #         # cv2.circle(image , RightSidePoint , 1 , (255,0,0) , -1)
+    #         # cv2.circle(image , LeftSidePoint , 1 , (255,0,0) , -1)
+            
+    #         # cv2.line(image , color_CornerPixel , RightSidePoint , (0,255,0) , 1)
+    #         # cv2.line(image, color_CornerPixel , LeftSidePoint , (0,255,0) , 1)
+    #         return LeftSidePoint , color_CornerPixel , RightSidePoint
+    #     else : # 코너점이 가장 좌측에 존재함. (x값이 가장 작을 때)
+    #         ## 끝점 구하기 
+    
+    #         RightSidePoint =  (color_CornerPixel[1]-y1)/math.sin(math.radians(angle))+x1 , y1
+    #         RightSidePoint2 =  (color_CornerPixel[1]-y1)/math.tan(math.radians(angle))+color_CornerPixel[0]+x1 , y1
+    #         print(f"RightSidePoint : " , RightSidePoint)
+    #         print(f"RightSidePoint2 : " , RightSidePoint2)
+    #         print(math.atan2(-(RightSidePoint[1]-color_CornerPixel[1]  ) , RightSidePoint[0] - color_CornerPixel[0])*180/math.pi)
+    #         RightSidePoint = np.int16(RightSidePoint)
+            
+    #         BotomPoint = (y2-color_CornerPixel[1])*math.tan(math.radians(angle)) + color_CornerPixel[0] +x1,  y2
+    #         print(f"BotomPoint : " , BotomPoint)
+    #         BotomPoint = np.int16(BotomPoint)
+            
+    #         ## 길이 확인
+    #         print("RightSide와 color_CornerPixel 길이 : " , math.sqrt( ((RightSidePoint[0])-color_CornerPixel[0])**2 + (RightSidePoint[1] - color_CornerPixel[1])**2))
+    #         print("LeftSide와 color_CornerPixel  길이 : " , math.sqrt((BotomPoint[0]-color_CornerPixel[0])**2 + (BotomPoint[1]- color_CornerPixel[1])**2))
+            
+    #         ## 시각화
+    #         # cv2.circle(image , color_CornerPixel , 1 , (0,0,255) , -1)
+    #         # cv2.circle(image , RightSidePoint , 1 , (255,0,0) , -1)
+    #         # cv2.circle(image , BotomPoint , 1 , (255,0,0) , -1)
+            
+    #         # cv2.line(image , color_CornerPixel , RightSidePoint , (0,255,0) , 1)
+    #         # cv2.line(image, color_CornerPixel , BotomPoint , (0,255,0) , 1)
+    
+    #         return BotomPoint , color_CornerPixel , RightSidePoint
+        
+    
+    def TransformDepthPixelToColorPixel(self , depth_pixel , depth_frame , center_distance):
+        '''
+        depth 영역의 pixel에 대응하는 color 영역에서의 pixel좌표 값으로 변환
+        '''
+        _, depth_point = self.DeProjectDepthPixeltoDepthPoint(depth_pixel[0] , depth_pixel[1] , depth_frame, center_distance)
+        color_point = self.depth_point_to_color_point(depth_point)
+        color_pixel = self.ProjectColorPointToColorPixel(color_point)
+        print("depth_pixel : " , depth_pixel)
+        print("color_pixel : " , color_pixel)
+        
+        return color_pixel 
+
     
     def depth_point_to_color_point(self , depth_point) -> float : 
         '''
@@ -531,7 +879,7 @@ class yolov5_demo(): # __init__ 부분은 건드리지 말고
         return
         1. color_pixel : color_frame에서 point에 대응하는 pixel 값
         '''
-        color_pixel = rs.rs2_projectrr_point_to_pixel(self.color_intrin, color_point)
+        color_pixel = rs.rs2_project_point_to_pixel(self.color_intrin, color_point)
         return color_pixel
     def GetCameraConfig(self):
         sensor_dep = self.profile.get_device().first_depth_sensor()
@@ -690,7 +1038,7 @@ class yolov5_demo(): # __init__ 부분은 건드리지 말고
         # print("first_pick _ self.firstpick return value : ",first_pick)
         if first_pick['label'] == 'box':
             depth_rect , result = self.CalculateAngle(first_pick['x1y1x2y2'] , depth_frame , first_pick['depth_from_camera'])
-            depth_rect , depth_colormap = self.PlotCalculateAngle(result, depth_rect , depth_colormap)  
+            depth_rect , depth_colormap = self.PlotCalculateAngle(result, depth_rect , depth_colormap , im0)  
             first_pick['angle'] = result['angle']
             depth_rect_generated = True
         else :
@@ -698,7 +1046,7 @@ class yolov5_demo(): # __init__ 부분은 건드리지 말고
             depth_rect_generated = False
             depth_rect = None
         self.PlotFirstPick(first_pick,im0)
-        return first_pick , im0 , depth_colormap , depth_rect , depth_rect_generated # depth_rect : 각도 계산하면서 나온 이진화 이미지, 하지만 3차원 채널 이미지(시각화)
+        return first_pick , im0 , depth_colormap , depth_rect , depth_rect_generated  # depth_rect : 각도 계산하면서 나온 이진화 이미지, 하지만 3차원 채널 이미지(시각화)
             
 
             
@@ -715,7 +1063,7 @@ if __name__ == "__main__":
         key = keyboard.read_key()
         if key == 'p':
             pred , depth_frame , im,im0s , depth_colormap =model.Predict(model=model.model)
-            first_pick , im0 , depth_colormap , depth_rect , depth_rect_generated = model.GetFirstPick(pred, depth_frame,im,im0s,depth_colormap)
+            first_pick , im0 , depth_colormap , depth_rect , depth_rect_generated  = model.GetFirstPick(pred, depth_frame,im,im0s,depth_colormap)
             image = np.hstack((im0,depth_colormap)) # im0 : yolo bounding box 시각화 및 first 시각화 이미지
             try : 
                 while 1:
@@ -740,6 +1088,7 @@ if __name__ == "__main__":
                     cv2.imshow("depth" ,depth_colormap)
                     if depth_rect_generated is True:
                         cv2.imshow("dpeth_crop" , depth_rect)
+                 
                     if cv2.waitKey(1) == ord('c'):
                         print("창 닫음")
                         break 

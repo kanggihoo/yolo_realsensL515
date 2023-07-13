@@ -518,7 +518,7 @@ class yolov5_demo(): # __init__ 부분은 건드리지 말고
         return
         1. color_pixel : color_frame에서 point에 대응하는 pixel 값
         '''
-        color_pixel = rs.rs2_projectrr_point_to_pixel(self.color_intrin, color_point)
+        color_pixel = rs.rs2_project_point_to_pixel(self.color_intrin, color_point)
         return color_pixel
     def GetCameraConfig(self):
         sensor_dep = self.profile.get_device().first_depth_sensor()
