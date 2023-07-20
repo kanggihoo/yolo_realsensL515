@@ -59,6 +59,7 @@ def FindAngleAndLength(iamge, reference_point , HEIGHT , WIDTH):
     print("mean angle : " , final_angle)
     
     if final_angle <0:
+        print(f"final_angle : {final_angle} , reference_point : {reference_point} , reference_point[1] : {reference_point[1]}")
         spare = reference_point[1]
         new_slice = image[spare:image.shape[0]-spare , spare: image.shape[1]-spare]
         reference_point = (lambda x : x-reference_point[1])(reference_point)
@@ -103,7 +104,7 @@ def FindAngleAndLength(iamge, reference_point , HEIGHT , WIDTH):
         WidthLength =   math.sqrt( ((RightSidePoint[0])-reference_point[0])**2 + (RightSidePoint[1] - reference_point[1])**2)
         HeightLenght = math.sqrt((BotomPoint[0]-reference_point[0])**2 + (BotomPoint[1]- reference_point[1])**2)
         print("RightSide와 reference_point 길이 : " , WidthLength)
-        print("LeftSide와 reference_point  길이 : " , HeightLenght)
+        print("BotomPoint reference_point  길이 : " , HeightLenght)
         
         if WidthLength > HeightLenght:
             final_angle  = round(final_angle+90,1)
@@ -117,7 +118,7 @@ def FindAngleAndLength(iamge, reference_point , HEIGHT , WIDTH):
     
        
 
-image = cv2.imread("./img/tmp11.jpg")
+image = cv2.imread("./img/tmp19.jpg")
 print(f"image.shape : {image.shape}" )
 gray = cv2.cvtColor(image , cv2.COLOR_BGR2GRAY)
 

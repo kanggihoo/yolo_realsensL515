@@ -26,7 +26,7 @@ import pandas as pd
 from utils.aruco_utils import ARUCO_DICT, aruco_display
 
 class BoxDetect():
-    def __init__(self , save_video='False'):
+    def __init__(self , save_video='False' , plot = 'true'):
         self.Camera_cofig()
         self.model = self.Model_cofig()
         self.save_video = save_video
@@ -271,13 +271,15 @@ class BoxDetect():
 
 parser = argparse.ArgumentParser()   
 parser.add_argument('--save_video' , action='store_true' , help='save_video')
+parser.add_argument("--plot" , action = 'store_true')
 opt = parser.parse_args()
 opt = vars(opt)
+print(opt)
 
 if __name__ == "__main__":
 #    check_requirements(exclude=('tensorboard', 'thop'))
-   model = BoxDetect(**opt)
-   model.Run(model=model.model)
-    
+#    model = BoxDetect(**opt)
+#    model.Run(model=model.model)
+
     
     
