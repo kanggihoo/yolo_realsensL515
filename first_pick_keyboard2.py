@@ -48,7 +48,7 @@ class yolov5_demo(): # __init__ 부분은 건드리지 말고
         self.model = self.Model_cofig()
     
         self.save_video = save_video
-        self.plot = plot
+        self.plot = True
         self.path = Path(os.path.relpath(ROOT, Path.cwd()))
         
         self.save_img_path = Path(r'C:\Users\11kkh\Desktop\realsense_custom_data')
@@ -295,7 +295,16 @@ class yolov5_demo(): # __init__ 부분은 건드리지 말고
         return  largest_contour , box_point 
     # IOU 구하기
     def FindIOU(self,binary , largest_contour , box_point):
-        intersection = np.zeros_like(binary)
+        y_boundary , x_boundary = list(map(lambda x : x-1 , binary.shape))
+        check_x = np.where(box_point[:,0] > x_boundary , True , False ) 
+        check_y = np.where(box_point[:,1] > y_boundary , True , False)
+        
+        if any(check_x) or any(check_y):
+            box_point_max = np.max(box_point , axis = 0) 
+            intersection = np.zeros(shape=(box_point_max[1] , box_point_max[0]))
+        else : 
+            intersection = np.zeros_like(binary)
+    
         cv2.drawContours(intersection, [largest_contour], -1, 255, thickness=cv2.FILLED)
         largest_contour_area = np.sum(intersection)/255
 
@@ -373,11 +382,13 @@ class yolov5_demo(): # __init__ 부분은 건드리지 말고
         
         ## 각도 구하기 및 시각화
         depth_rect_3channel = cv2.cvtColor(depth_rect_one_channel , cv2.COLOR_GRAY2RGB) # 1채널 => 3채널 변경(시각화 이미지)
-        
-        angle , add_90angle = self.FindAngle(box_int)
-        p1,p2,p3,p4 = (0,0,0,0)
 
-        if IOU < self.IOUThreshold: 
+        if IOU > self.IOUThreshold: 
+            angle , add_90angle = self.FindAngle(box_int)
+            p1,p2,p3,p4 = (0,0,0,0)
+            final_angle = angle
+        
+        else:
             
             # 검출할 코너의 영역 설정(영역에 따라 코너 점이 달라질 수도 있어서 이부분에 대한 조치필요)
             HEIGHT , WIDTH =  list(map(lambda x : int(x) , (depth_rect_one_channel.shape[0]*0.5 , depth_rect_one_channel.shape[1]*0.5)))
@@ -386,15 +397,22 @@ class yolov5_demo(): # __init__ 부분은 건드리지 말고
             p1, p2 ,p3,p4 = self.FindFourPoint(corner_image , HEIGHT , WIDTH )
             
             if p1[0] < p4[0] and p2[0] == p3[0]: # 좌측 상단에 최고점 존재(p1) => 구하고자 하는 각도 음수
-                final_angle , new_slice = self.FindAngleAndLength(depth_rect_one_channel, p1 , HEIGHT , WIDTH,depth_rect_3channel)
+                print("좌측 상단 최고점 p1존재")
+                corner_image = cv2.morphologyEx(depth_rect_one_channel , cv2.MORPH_CLOSE , kernel=kernel , iterations=3)
+                final_angle , new_slice = self.FindAngleAndLength(corner_image, p1 , depth_rect_3channel)
 
             elif p1[1] == p4[1] and p2[0] < p3[0]: # 좌측 상단에 x값이 가장 작은 점이 있음(p2) => 구하고자 하는 각도 양수
                 ## p2를 기준으로 다시 영역을 설정한 뒤 각도 계산
+                print("좌측 상단 x값 가장 작음(p2)")
                 corner_image = cv2.morphologyEx(depth_rect_one_channel , cv2.MORPH_CLOSE , kernel=kernel , iterations=3)
-                final_angle, new_slice = self.FindAngleAndLength(corner_image, p2 , HEIGHT , WIDTH,depth_rect_3channel)
+                final_angle, new_slice = self.FindAngleAndLength(corner_image, p2 , depth_rect_3channel)
+            elif p1[0] < p4[0]  and p2[0] != p3[0] : # depth_rect의 반절영역에서 꼭짓점이 2개 있는 경우 (첫번째 case의 변형)
+                print("꼭짓점 2개 발견")
+                corner_image = cv2.morphologyEx(depth_rect_one_channel , cv2.MORPH_CLOSE , kernel=kernel , iterations=3)
+                final_angle , new_slice = self.FindAngleAndLength(corner_image, p1 , depth_rect_3channel)
                 
             else : # 좌측을 더 넓게 탐색 
-                print("예외 경우, 영역 재탐색 ")
+                print("예외 발생, 영역 재탐색(width 감소 , height 증가) ")
                 HEIGHT , WIDTH =  list(map(lambda x : int(x) , (depth_rect_one_channel.shape[0]*0.7 , depth_rect_one_channel.shape[1]*0.3)))
                 corner_image = depth_rect_one_channel[:HEIGHT , :WIDTH]   
                 p1,p2,p3,p4 = self.FindFourPoint(corner_image , HEIGHT , WIDTH)
@@ -402,17 +420,16 @@ class yolov5_demo(): # __init__ 부분은 건드리지 말고
                 
                 if p1[0] < p4[0] and p2[0] == p3[0]: # 좌측 상단에 최고점 존재(p1) => 구하고자 하는 각도 음수
                     ## p1을 기준으로 다시 영역을 설정한 뒤 각도 계산
-                    final_angle , new_slice = self.FindAngleAndLength(depth_rect_one_channel, p1 , HEIGHT , WIDTH,depth_rect_3channel)
+                    print("좌측 상단 최고점 p1존재")
+                    corner_image = cv2.morphologyEx(depth_rect_one_channel , cv2.MORPH_CLOSE , kernel=kernel , iterations=3)
+                    final_angle , new_slice = self.FindAngleAndLength(corner_image, p1 ,depth_rect_3channel)
 
                 elif p1[1] == p4[1] and p2[0] < p3[0]: # 좌측 상단에 x값이 가장 작은 점이 있음(p2) => 구하고자 하는 각도 양수
                     ## p2를 기준으로 다시 영역을 설정한 뒤 각도 계산
+                    print("좌측 상단 x값 가장 작음(p2)")
                     corner_image = cv2.morphologyEx(depth_rect_one_channel , cv2.MORPH_CLOSE , kernel=kernel , iterations=3)
-                    final_angle, new_slice = self.FindAngleAndLength(corner_image, p2 , HEIGHT , WIDTH,depth_rect_3channel)
-            
-            # 결과에 대한 시각화 
-            
-        else :
-            final_angle = angle
+                    final_angle, new_slice = self.FindAngleAndLength(corner_image, p2 ,depth_rect_3channel)
+
         
         final_angle = round(final_angle,1)
         print("final_angle : " , final_angle)
@@ -457,7 +474,7 @@ class yolov5_demo(): # __init__ 부분은 건드리지 말고
         
         
         ## depth_rect에서 최종적인 결과 시각화 (사각형의 경계면) 
-        if result['IOU'] > self.IOUThreshold: # 임계치 IOU보다 큰 경우 , boxpoint 에 해당되는 점 
+        if result['IOU'] > self.IOUThreshold: # 임계치 IOU보다 크거나 같은 경우 , boxpoint 에 해당되는 점 
             box_int= result['boxpoint']
             cv2.drawContours(depth_rect , [box_int] , -1 , line_color ,thickness)
         else : 
@@ -533,11 +550,21 @@ class yolov5_demo(): # __init__ 부분은 건드리지 말고
         p4 = (WIDTH-1 , RightY)
         return p1,p2,p3,p4
     
-    def FindAngleAndLength(self,iamge, reference_point , HEIGHT , WIDTH, depth_rect_3channel ):
+    def FindAngleAndLength(self,iamge, reference_point , depth_rect_3channel ):
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))
         corner_image = cv2.morphologyEx(iamge , cv2.MORPH_CLOSE , kernel=kernel , iterations=3)
         y,x = np.where(corner_image ==255) 
-        candidate = range(reference_point[0]+10 , WIDTH+20 ,2)   
+        
+        if reference_point[0] > depth_rect_3channel.shape[1] / 4:
+            print("reference_point[0] > depth_rect_3channel.shape[1] / 4")
+            end = int(depth_rect_3channel.shape[1]*0.8)
+            start = int((end - reference_point[0])*0.6) + reference_point[0]
+        else : 
+            print("reference_point[0] < depth_rect_3channel.shape[1] / 4")
+            end = int(depth_rect_3channel.shape[1]*0.7)
+            start = int((end - reference_point[0])*0.8) + reference_point[0]
+        
+        candidate = range(start , end ,2)   
         final_angle = 0 
         for i in candidate:
             RightX_index = np.where(x == i)
@@ -546,14 +573,13 @@ class yolov5_demo(): # __init__ 부분은 건드리지 말고
             angle = math.atan2(-(RightPoint[1] - reference_point[1]) , RightPoint[0] - reference_point[0])*180/math.pi
             final_angle += angle
         final_angle /= len(candidate)
-        # print("mean angle : " , final_angle)
+        # print("mean angle : " , final_angle)pp
         
         if final_angle <0:
             ################################# 여기서 self.spare_roi와 refrence_point[1] 중 작은 값으로 spare값으로 설정해보는 것도 좋을 듯?? 
             print(f"final_angle : {final_angle} , reference_point : {reference_point} , reference_point[1] : {reference_point[1]} , spare_roi :{self.spare_roi}")
-            if reference_point[1] < self.spare_roi:
-                spare = reference_point[1]
-            else : spare = self.spare_roi
+            spare = reference_point[1]
+            
             new_slice = depth_rect_3channel[spare:depth_rect_3channel.shape[0]-spare , spare: depth_rect_3channel.shape[1]-spare]
             reference_point = (lambda x : x-reference_point[1])(reference_point)
             
@@ -569,9 +595,11 @@ class yolov5_demo(): # __init__ 부분은 건드리지 말고
             print("LeftSide와 reference_point  길이 : " , HeightLenght)
         
             if WidthLength > HeightLenght:
-                final_angle  = abs(final_angle)+90
+                # final_angle  = abs(final_angle)+90
+                final_angle  = 180 - abs(final_angle)
             else : 
-                final_angle  = abs(final_angle)
+                # final_angle  = abs(final_angle)
+                final_angle  = 90 - abs(final_angle)
                 
             if self.plot is True:    
                 cv2.line(new_slice , reference_point , RightSidePoint , (0,255,0) ,2)
@@ -580,25 +608,24 @@ class yolov5_demo(): # __init__ 부분은 건드리지 말고
         else :
             ################################# 여기서 self.spare_roi와 refrence_point[0] 중 작은 값으로 spare값으로 설정해보는 것도 좋을 듯?? 
             print(f"final_angle : {final_angle} , reference_point : {reference_point} , reference_point[0] : {reference_point[0]} , spare_roi :{self.spare_roi}")
-            if reference_point[0] < self.spare_roi:
-                spare = reference_point[0]
-            else : spare = self.spare_roi
+            spare = reference_point[0]
+            
             new_slice = depth_rect_3channel[spare:depth_rect_3channel.shape[0]-spare , spare: depth_rect_3channel.shape[1]-spare]
             reference_point = (lambda x : x-reference_point[0])(reference_point)
             
-            RightSidePoint = (reference_point[1])/math.tan(math.radians(angle)) , 0
+            RightSidePoint = (reference_point[1])/math.tan(math.radians(final_angle)) , 0
             RightSidePoint = np.int16(RightSidePoint)
             
             BotomPoint = (new_slice.shape[0]-1-reference_point[1])*math.tan(math.radians(final_angle)),  new_slice.shape[0] -1
             BotomPoint = np.int16(BotomPoint)
             
-            LastPoint = math.sqrt( ((RightSidePoint[0])-reference_point[0])**2 + (RightSidePoint[1] - reference_point[1])**2)*math.cos(math.radians(angle))+BotomPoint[0] , (new_slice.shape[0]-1)-math.sqrt( ((RightSidePoint[0])-reference_point[0])**2 + (RightSidePoint[1] - reference_point[1])**2)*math.sin(math.radians(angle))
+            LastPoint = math.sqrt( ((RightSidePoint[0])-reference_point[0])**2 + (RightSidePoint[1] - reference_point[1])**2)*math.cos(math.radians(final_angle))+BotomPoint[0] , (new_slice.shape[0]-1)-math.sqrt( ((RightSidePoint[0])-reference_point[0])**2 + (RightSidePoint[1] - reference_point[1])**2)*math.sin(math.radians(final_angle))
             LastPoint = np.int16(LastPoint)
             
             WidthLength =   math.sqrt( ((RightSidePoint[0])-reference_point[0])**2 + (RightSidePoint[1] - reference_point[1])**2)
             HeightLenght = math.sqrt((BotomPoint[0]-reference_point[0])**2 + (BotomPoint[1]- reference_point[1])**2)
             print("RightSide와 reference_point 길이 : " , WidthLength)
-            print("LeftSide와 reference_point  길이 : " , HeightLenght)
+            print("BotomPoint와 reference_point  길이 : " , HeightLenght)
             
             if WidthLength > HeightLenght:
                 final_angle  = final_angle
@@ -838,8 +865,8 @@ if __name__ == "__main__":
                         file_name2 = f"{now.strftime('%Y_%m_%d_%H_%M_%S_%f')}_depth"+suffix
                         file_path = model.save_img_path / file_name
                         file_path2 = model.save_img_path / file_name2
-                        # save_image = cv2.resize(model.origin_colorc_image , (640,640))
-                        # cv2.imwrite(file_path , save_image) # 추후 학습을 위한 origin image 저장
+                        save_image = cv2.resize(model.origin_color_image , (640,640))
+                        cv2.imwrite(file_path , save_image) # 추후 학습을 위한 origin image 저장
                         cv2.imwrite(file_path2 , depth_rect) 
                         print(f'save_image : {file_name} , save_path : {file_path}')
                     if cv2.waitKey(1) == ord('f'):
