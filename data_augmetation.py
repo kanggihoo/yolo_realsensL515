@@ -59,17 +59,18 @@ def augment_yolo(image, textfile_path , iteration=1):
     
     
     transform = A.Compose([
-        # A.HorizontalFlip(p = 0.4), # 좌우 대칭
-        A.Rotate(limit = 30 , p=0.7 ), # 회전
-        A.Blur(p=0.2), # blur 효과
-        # A.GaussNoise(p=0.2, mean=3),
-        A.Downscale(p=0.1 , interpolation=cv2.INTER_NEAREST), # downscale(이미지 품질 낮춤)
+        A.HorizontalFlip(p = 0.4), # 좌우 대칭
+        # A.Rotate(limit = 30 , p=0.7 ), # 회전
+        # A.Blur(p=0.1), # blur 효과
+        # A.Downscale(p=0.1 , interpolation=cv2.INTER_NEAREST), # downscale(이미지 품질 낮춤)
         A.RandomBrightnessContrast(p=0.5 , brightness_limit=0.2),# Randomly change brightness and contrast
-        A.MotionBlur(p=0.3), # Apply motion blur to the input image using a random-sized kernel.
-        # A.CLAHE(p=0.2), # Contrast Limited Adaptive Histogram Equalization to the input image
+        A.MotionBlur(p=0.1), # Apply motion blur to the input image using a random-sized kernel.
+        # A.CLAHE(p=1), # Contrast Limited Adaptive Histogram Equalization to the input image
         # A.Lambda : 사용자 정의 함수
         # A.RandomRotate90(p=0.3), # 90도를 랜덤하게 회전
         # A.Affine(p=0.3 , translate_px= {"x":100}), # 아핀 변환(사용자가 지정한 중심을 기준으로 회전) , scale : 1보다 작으면 줌 , 1보다 크면 확대 , translate_px [x,y] x축방향 x, y축방향 y만큼이동
+        # A.RandomCrop(height=640 , width=640 , p=1),
+        A.ShiftScaleRotate(shift_limit=0.2 , scale_limit = 0.3 , rotate_limit=25, p=0.7),
         A.Flip(p=0.4) # 상하좌우 회전
         
         
@@ -117,8 +118,6 @@ def Check_image(images , pixel_label_bboxess):
     pixel_bboxess =>  numpy배열 형태의 각 이미지에 맞는 라벨값과 , pixel_bboxess정보 
     
     '''
-    
-    
     num_image = images.shape[0]
     for idx in range(num_image):
         for pixel_label_bboxes  in pixel_label_bboxess[idx]:
@@ -193,34 +192,35 @@ import argparse
 
 
 # # 이미지 로드(특정 디렉토리 모든 이미지 증강)
-# img_list = glob.glob(r'C:/Users/11kkh/Desktop/tmp/data/*.jpg')
-# txt_list = glob.glob(r'C:/Users/11kkh/Desktop/tmp/label/*.txt')
-# # 반복횟수 지정
-# iteration = 5
-# for idx , path in enumerate(img_list):
-#     compare = Path('C:/Users/11kkh/Desktop/tmp/label/').joinpath(str(Path(path).stem)+".txt") 
-#     if not compare.exists():
-#         continue
-#     image = cv2.imread(img_list[idx])
-#     txt_file = compare
 
-#     # bounding box 좌표 설정 (형식: [x_min, y_min, x_max, y_max])
+img_list = glob.glob(r'C:\Users\11kkh\Desktop\realsense_custom_data\data\*.jpg')
+txt_list = glob.glob(r'C:\Users\11kkh\Desktop\realsense_custom_data\label\*.txt')
+# 반복횟수 지정
+iteration = 10
+for idx , path in enumerate(img_list):
+    compare = Path('C:/Users/11kkh/Desktop/realsense_custom_data/label/').joinpath(str(Path(path).stem)+".txt") 
+    if not compare.exists():
+        continue
+    image = cv2.imread(img_list[idx])
+    txt_file = compare
+    
+    # bounding box 좌표 설정 (형식: [x_min, y_min, x_max, y_max])
 
-#     # YOLO 형식으로 이미지와 bounding box를 증강합니다.
-#     augmented_images, augmented_label_bboxes,original_bboxes,pixel_label_bboxes = augment_yolo(image, txt_file , iteration=iteration)
-#     # Save_augmented_image(augmented_imags=augmented_images)
-#     Check_image(augmented_images , pixel_label_bboxes)
-#     # Save_augmented_image_label(augmented_imags=augmented_images ,augmented_label_bboxes=augmented_label_bboxes)
+    # YOLO 형식으로 이미지와 bounding box를 증강합니다.
+    augmented_images, augmented_label_bboxes,original_bboxes,pixel_label_bboxes = augment_yolo(image, txt_file , iteration=iteration)
+    # Save_augmented_image(augmented_imags=augmented_images)
+    # Check_image(augmented_images , pixel_label_bboxes)
+    Save_augmented_image_label(augmented_imags=augmented_images ,augmented_label_bboxes=augmented_label_bboxes)
 
 # 이미지 테스트용도 확인
-image = cv2.imread(r'C:\Users\11kkh\Desktop\yolov5\2023_05_30_00_57_25_369018.jpg')
-txt_file = r'C:\Users\11kkh\Desktop\yolov5\2023_05_30_00_57_25_369018.txt'
-iteration = 10
-# bounding box 좌표 설정 (형식: [x_min, y_min, x_max, y_max])
+# image = cv2.imread(r'C:\Users\11kkh\Desktop\realsense_custom_data\data\2023_07_08_22_51_50_728364.jpg')
+# txt_file = r'C:\Users\11kkh\Desktop\realsense_custom_data\label\2023_07_08_22_51_50_728364.txt'
+# iteration = 10
+# # bounding box 좌표 설정 (형식: [x_min, y_min, x_max, y_max])
 
-# YOLO 형식으로 이미지와 bounding box를 증강합니다.
-augmented_images, augmented_label_bboxes,original_bboxes,pixel_label_bboxes = augment_yolo(image, txt_file , iteration=iteration)
-# Save_augmented_image(augmented_imags=augmented_images)
-Check_image(augmented_images , pixel_label_bboxes)
+# # YOLO 형식으로 이미지와 bounding box를 증강합니다.
+# augmented_images, augmented_label_bboxes,original_bboxes,pixel_label_bboxes = augment_yolo(image, txt_file , iteration=iteration)
+# # Save_augmented_image(augmented_imags=augmented_images)
+# Check_image(augmented_images , pixel_label_bboxes)
 # Save_augmented_image_label(augmented_imags=augmented_images ,augmented_label_bboxes=augmented_label_bboxes)
 

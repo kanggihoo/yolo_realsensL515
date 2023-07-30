@@ -157,7 +157,7 @@ def FindAngleAndLength(iamge, reference_point , depth_rect_3channel , direction,
             print(angle)
             cv2.circle(depth_rect_3channel , RightPoint , 3 , (255,0,0) , -1)
             final_angle += angle
-        assert len(candidate)-1 >=1 , print("적합한 후보 없음")
+        assert len(candidate_list)-1 >=1 , print("적합한 후보 없음")
         # if len(candidate_list)-1 <= 1:
         #     ##############################################################################################################후보 갯수 부족한 경우 (start 범위 더 늘림)
         #     print("후보 갯수 부족! ")
@@ -235,9 +235,11 @@ def FindAngleAndLength(iamge, reference_point , depth_rect_3channel , direction,
             print("LeftSide와 reference_point  길이 : " , HeightLenght)
 
             if WidthLength > HeightLenght:
-                final_angle  = abs(final_angle)+90
+                # final_angle  = abs(final_angle)+90
+                final_angle  = 180 - abs(final_angle)
             else : 
-                final_angle  = abs(final_angle)
+                # final_angle  = abs(final_angle)
+                final_angle  = 90 - abs(final_angle)
             cv2.line(new_slice , reference_point , RightSidePoint , (0,255,0) ,2)
             cv2.line(new_slice, reference_point , LeftSidePoint , (0,255,0) , 2)
             cv2.line(new_slice, LeftSidePoint , LastPoint , (0,255,0) , 2)
@@ -250,9 +252,8 @@ def FindAngleAndLength(iamge, reference_point , depth_rect_3channel , direction,
             spare = reference_point[0]
           
             new_slice = depth_rect_3channel[spare:depth_rect_3channel.shape[0]-spare , spare: depth_rect_3channel.shape[1]-spare]
-            
             reference_point = (lambda x : x-reference_point[0])(reference_point)
-            
+            ## RightSidePoint 구할 때 여유분 +2 더함. 
             RightSidePoint = (reference_point[1]+2)/math.tan(math.radians(final_angle)) , 0
             RightSidePoint = np.int16(RightSidePoint)
             
@@ -278,7 +279,7 @@ def FindAngleAndLength(iamge, reference_point , depth_rect_3channel , direction,
         return final_angle , new_slice 
 
 
-image = cv2.imread("./img/tmp24.jpg")
+image = cv2.imread("./img/tmp47.jpg")
 depth_rect_one_channel = cv2.cvtColor(image , cv2.COLOR_BGR2GRAY)
 _, depth_rect_one_channel = cv2.threshold(depth_rect_one_channel, 128, 255, cv2.THRESH_BINARY)
 depth_rect_3channel = cv2.cvtColor(depth_rect_one_channel, cv2.COLOR_GRAY2BGR)
@@ -319,7 +320,7 @@ else :
         corner_image = cv2.morphologyEx(depth_rect_one_channel , cv2.MORPH_CLOSE , kernel=kernel , iterations=3)
         final_angle , new_slice = FindAngleAndLength(corner_image, p1 ,depth_rect_3channel, direction='DOWN')
     else : # 좌측을 더 넓게 탐색 
-        print("예외 경우, 영역 재탐색 ")
+        print("예외 경우, 영역 재탐색 (width 감소 , height 증가)")
         HEIGHT , WIDTH=  list(map(lambda x : int(x) , (depth_rect_one_channel.shape[0]*0.7 , depth_rect_one_channel.shape[1]*0.3)))
         corner_image = depth_rect_one_channel[:HEIGHT , :WIDTH]   
         p1,p2,p3,p4 = FindFourPoint(corner_image , HEIGHT , WIDTH)
